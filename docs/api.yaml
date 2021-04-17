@@ -1,0 +1,78 @@
+asyncapi: 2.0.0
+info:
+  title: Tic tac toe
+  version: 0.1.0
+  description: Currently in early stage of development.
+servers:
+  only-one:
+    url: "mutsis-server.com"
+    description: Development server
+    protocol: ws
+channels:
+  game:
+    subscribe:
+      message:
+        oneOf:
+          - $ref: "#/components/messages/SearchingOpponent"
+          - $ref: "#/components/messages/OpponentDrew"
+          - $ref: "#/components/messages/GameOn"
+          - $ref: "#/components/messages/GameEnded"
+
+components:
+  messages:
+    SearchingOpponent:
+      payload:
+        type: object
+        properties:
+          waiting:
+            type: string
+
+    OpponentDrew:
+      payload:
+        type: object
+        properties:
+          theirDraw:
+            $ref: "#/components/schemas/Chip"
+          currentBoard:
+            $ref: "#/components/schemas/Board"
+
+    GameOn:
+      payload:
+        type: object
+        properties:
+          currentBoard:
+            $ref: "#/components/schemas/Board"
+
+    GameEnded:
+      payload:
+        type: object
+        properties:
+          result:
+            enum:
+              - won
+              - lost
+
+  schemas:
+    Board:
+      type: array
+      items:
+        $ref: "#/components/schemas/Chip"
+
+    Coordinate:
+      type: object
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+
+    Chip:
+      type: object
+      properties:
+        coordinate:
+          $ref: "#/components/schemas/Coordinate"
+        sign:
+          type: string
+          enum:
+            - cross
+            - circle
