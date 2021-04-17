@@ -17,6 +17,9 @@ channels:
           - $ref: "#/components/messages/OpponentDrew"
           - $ref: "#/components/messages/GameOn"
           - $ref: "#/components/messages/GameEnded"
+    publish:
+      message:
+        $ref: "#/components/messages/DrawChip"
 
 components:
   messages:
@@ -51,6 +54,10 @@ components:
             enum:
               - won
               - lost
+
+    DrawChip:
+      payload:
+        $ref: "#/components/schemas/Coordinate"
 
   schemas:
     Board:
