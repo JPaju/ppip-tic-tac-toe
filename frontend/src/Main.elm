@@ -5,7 +5,10 @@ import Element exposing (Attribute, Element, centerX, centerY, column, el, fill,
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html)
+import Html.Events exposing (onClick)
+import Matrix exposing (Coordinate, Matrix)
 import Ui
 import Util exposing (hasValue)
 
@@ -19,34 +22,46 @@ type Mark
     | O
 
 
-type alias Coordinate =
-    ( Int, Int )
-
-
-type alias Move =
-    ( Coordinate, Mark )
-
-
 type alias Board =
-    List Move
+    Matrix (Maybe Mark)
 
 
-type Result
+
+-- type alias Move =
+--     ( Matrix.Coordinate, Mark )
+
+
+type GameResult
     = Tie
     | Won Mark
 
 
 type Game
-    = Finished Board Result
+    = Finished Board GameResult
     | OnGoing
         { board : Board
         , turn : Mark
         }
 
 
+initBoard : Int -> Board
+initBoard size =
+    Matrix.square size (always Nothing)
+
+
 initGame : Game
 initGame =
-    OnGoing { board = [], turn = X }
+    OnGoing { board = initBoard 8, turn = X }
+
+
+getBoard : Game -> Board
+getBoard game =
+    case game of
+        OnGoing { board } ->
+            board
+
+        Finished board _ ->
+            board
 
 
 
@@ -69,67 +84,88 @@ init =
 
 
 type Msg
-    = MoveMade Move
+    = MarkMade Matrix.Coordinate
     | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MoveMade _ ->
-            ( model, Cmd.none )
+        MarkMade coordinate ->
+            ( { model
+                | game =
+                    case model.game of
+                        OnGoing { board, turn } ->
+                            OnGoing
+                                { turn = changeTurn turn
+                                , board = Matrix.set coordinate (Just turn) board
+                                }
+
+                        (Finished _ _) as game ->
+                            game
+              }
+            , Cmd.none
+            )
 
         NoOp ->
             ( model, Cmd.none )
+
+
+changeTurn : Mark -> Mark
+changeTurn mark =
+    case mark of
+        X ->
+            O
+
+        O ->
+            X
 
 
 
 ---- VIEW ----
 
 
-header : List (Attribute msg) -> Element msg
-header attributes =
-    column (spacing 20 :: padding 20 :: attributes)
-        [ image [ height (px 200), centerX ] { src = "/logo.svg", description = "Elm logo" }
-        , el [ Font.size 30, Font.bold ] (text "Your Elm App is working!")
-        ]
-
-
 view : Model -> Html Msg
 view model =
     Element.layout [ height fill, width fill ] <|
         column [ height fill, width fill ]
-            [ header [ centerX ]
-            , viewBoard [ centerY, centerX ] model.game
-            ]
+            [ viewBoard [ centerY, centerX ] (getBoard model.game) ]
 
 
-viewBoard : List (Attribute msg) -> Game -> Element msg
-viewBoard attributes _ =
-    -- column (spacing 10 :: explain Debug.todo :: attributes)
+viewBoard : List (Attribute Msg) -> Board -> Element Msg
+viewBoard attributes board =
     column attributes
-        [ row [] [ square (Just X), square (Just O), square Nothing ]
-        , row [] [ square Nothing, square (Just O), square Nothing ]
-        , row [] [ square Nothing, square Nothing, square (Just X) ]
-        ]
+        (board
+            |> Matrix.getRowsWithCoordinates
+            |> List.map viewRow
+        )
 
 
-square : Maybe Mark -> Element msg
-square mark =
+viewRow : List ( Maybe Mark, Coordinate ) -> Element Msg
+viewRow columns =
+    columns
+        |> List.map square
+        |> row []
+
+
+{-| TODO Refactor this
+-}
+square : ( Maybe Mark, Coordinate ) -> Element Msg
+square ( maybeMark, coord ) =
     let
         size =
             [ height (px 100), width (px 100) ]
 
+        marked =
+            hasValue maybeMark
+
         icon =
-            mark
+            maybeMark
                 |> Maybe.map viewMark
                 |> Maybe.withDefault none
 
-        hasMark =
-            hasValue mark
-
-        pointerIcon =
-            if hasMark then
+        mouseIcon =
+            if marked then
                 Ui.notAllowed
 
             else
@@ -137,7 +173,7 @@ square mark =
 
         hoverEffects =
             mouseOver <|
-                if hasMark then
+                if marked then
                     []
 
                 else
@@ -145,15 +181,25 @@ square mark =
 
         borders =
             [ Border.color Ui.black, Border.solid, Border.width 1 ]
+
+        onClick =
+            if not marked then
+                Just (MarkMade coord)
+
+            else
+                Nothing
     in
-    el (size ++ borders ++ [ pointerIcon, hoverEffects ]) icon
+    Input.button (size ++ borders ++ [ mouseIcon, hoverEffects ]) { onPress = onClick, label = icon }
+
+
+
+-- el (size ++ borders ++ [ mouseIcon, hoverEffects ]) icon
 
 
 viewMark : Mark -> Element msg
 viewMark mark =
     let
         icon =
-            -- TODO Better icons?
             case mark of
                 X ->
                     '❌'
