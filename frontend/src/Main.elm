@@ -1,16 +1,14 @@
 module Main exposing (..)
 
 import Browser
-import Element exposing (Attribute, Element, centerX, centerY, column, el, fill, height, image, mouseOver, none, padding, pointer, px, row, spacing, text, width)
+import Element exposing (Attribute, Element, centerX, centerY, column, el, fill, height, mouseOver, none, pointer, px, row, spacing, text, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
-import Html.Events exposing (onClick)
 import Matrix exposing (Coordinate, Matrix)
 import Ui
-import Util exposing (hasValue)
 
 
 
@@ -26,11 +24,6 @@ type alias Board =
     Matrix (Maybe Mark)
 
 
-
--- type alias Move =
---     ( Matrix.Coordinate, Mark )
-
-
 type GameResult
     = Tie
     | Won Mark
@@ -42,16 +35,6 @@ type Game
         { board : Board
         , turn : Mark
         }
-
-
-initBoard : Int -> Board
-initBoard size =
-    Matrix.square size (always Nothing)
-
-
-initGame : Game
-initGame =
-    OnGoing { board = initBoard 8, turn = X }
 
 
 getBoard : Game -> Board
@@ -72,9 +55,17 @@ type alias Model =
     { game : Game }
 
 
+initGame : Int -> Game
+initGame boardSize =
+    OnGoing
+        { board = Matrix.square boardSize (always Nothing)
+        , turn = X
+        }
+
+
 init : ( Model, Cmd Msg )
 init =
-    ( { game = initGame }
+    ( { game = initGame 5 }
     , Cmd.none
     )
 
@@ -84,16 +75,16 @@ init =
 
 
 type Msg
-    = MarkMade Matrix.Coordinate
-    | NoOp
+    = BoardClicked Matrix.Coordinate
+    | ResetGame
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MarkMade coordinate ->
-            ( { model
-                | game =
+        BoardClicked coordinate ->
+            let
+                newgame =
                     case model.game of
                         OnGoing { board, turn } ->
                             OnGoing
@@ -101,14 +92,15 @@ update msg model =
                                 , board = Matrix.set coordinate (Just turn) board
                                 }
 
-                        (Finished _ _) as game ->
-                            game
-              }
+                        (Finished _ _) as finished ->
+                            finished
+            in
+            ( { model | game = newgame }
             , Cmd.none
             )
 
-        NoOp ->
-            ( model, Cmd.none )
+        ResetGame ->
+            ( { model | game = initGame 5 }, Cmd.none )
 
 
 changeTurn : Mark -> Mark
@@ -128,8 +120,27 @@ changeTurn mark =
 view : Model -> Html Msg
 view model =
     Element.layout [ height fill, width fill ] <|
-        column [ height fill, width fill ]
-            [ viewBoard [ centerY, centerX ] (getBoard model.game) ]
+        column [ centerX, centerY, spacing 50 ]
+            [ gameHeader model.game
+            , getBoard model.game |> viewBoard []
+            , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
+            ]
+
+
+gameHeader : Game -> Element msg
+gameHeader game =
+    row [ centerX, Font.size 38 ] <|
+        case game of
+            OnGoing { turn } ->
+                [ el [] (text "Turn: "), viewMark turn ]
+
+            Finished _ result ->
+                case result of
+                    Won winner ->
+                        [ viewMark winner, text " won!" ]
+
+                    Tie ->
+                        [ el [] (text "Tie!") ]
 
 
 viewBoard : List (Attribute Msg) -> Board -> Element Msg
@@ -144,56 +155,41 @@ viewBoard attributes board =
 viewRow : List ( Maybe Mark, Coordinate ) -> Element Msg
 viewRow columns =
     columns
-        |> List.map square
+        |> List.map boardCell
         |> row []
 
 
-{-| TODO Refactor this
--}
-square : ( Maybe Mark, Coordinate ) -> Element Msg
-square ( maybeMark, coord ) =
+boardCell : ( Maybe Mark, Coordinate ) -> Element Msg
+boardCell ( maybeMark, coord ) =
     let
         size =
-            [ height (px 100), width (px 100) ]
+            px 100
 
-        marked =
-            hasValue maybeMark
-
-        icon =
-            maybeMark
-                |> Maybe.map viewMark
-                |> Maybe.withDefault none
-
-        mouseIcon =
-            if marked then
-                Ui.notAllowed
-
-            else
-                pointer
-
-        hoverEffects =
-            mouseOver <|
-                if marked then
-                    []
-
-                else
-                    [ Background.color Ui.grey ]
-
-        borders =
-            [ Border.color Ui.black, Border.solid, Border.width 1 ]
-
-        onClick =
-            if not marked then
-                Just (MarkMade coord)
-
-            else
-                Nothing
+        cellStyles =
+            [ height size, width size, Border.width 1 ]
     in
-    Input.button (size ++ borders ++ [ mouseIcon, hoverEffects ]) { onPress = onClick, label = icon }
+    case maybeMark of
+        Just mark ->
+            markedCell cellStyles mark
+
+        Nothing ->
+            emptyCell cellStyles coord
 
 
+emptyCell : List (Attribute Msg) -> Coordinate -> Element Msg
+emptyCell attributes coordinate =
+    Input.button (pointer :: mouseOver [ Background.color Ui.grey ] :: attributes)
+        { onPress = Just (BoardClicked coordinate)
+        , label = none
+        }
 
--- el (size ++ borders ++ [ mouseIcon, hoverEffects ]) icon
+
+markedCell : List (Attribute msg) -> Mark -> Element msg
+markedCell attributes mark =
+    Input.button (Ui.notAllowed :: attributes)
+        { onPress = Nothing
+        , label = viewMark mark
+        }
 
 
 viewMark : Mark -> Element msg
