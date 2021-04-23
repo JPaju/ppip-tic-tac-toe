@@ -7,7 +7,10 @@ import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
+import Json.Decode as Json exposing (decodeValue, int)
+import Json.Decode.Pipeline exposing (required)
 import Matrix exposing (Coordinate, Matrix)
+import Ports
 import Ui
 
 
@@ -77,30 +80,44 @@ init =
 type Msg
     = BoardClicked Matrix.Coordinate
     | ResetGame
+    | ReceivedMark Mark Coordinate
+    | CommunicationError String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         BoardClicked coordinate ->
-            let
-                newgame =
-                    case model.game of
-                        OnGoing { board, turn } ->
-                            OnGoing
-                                { turn = changeTurn turn
-                                , board = Matrix.set coordinate (Just turn) board
-                                }
-
-                        (Finished _ _) as finished ->
-                            finished
-            in
-            ( { model | game = newgame }
-            , Cmd.none
+            ( { model | game = updateGame model.game coordinate }
+            , Ports.sendCoordinate coordinate
             )
 
         ResetGame ->
             ( { model | game = initGame 5 }, Cmd.none )
+
+        ReceivedMark mark coordinate ->
+            ( { model | game = updateGame model.game coordinate }, Cmd.none )
+
+        CommunicationError desc ->
+            Debug.log "Invalid data:" ( model, Cmd.none )
+
+
+updateGame : Game -> Coordinate -> Game
+updateGame game coordinate =
+    case game of
+        OnGoing { board, turn } ->
+            OnGoing
+                { turn = changeTurn turn
+                , board = placeMark turn coordinate board
+                }
+
+        (Finished _ _) as finished ->
+            finished
+
+
+placeMark : Mark -> Coordinate -> Board -> Board
+placeMark mark coordinate board =
+    Matrix.set coordinate (Just mark) board
 
 
 changeTurn : Mark -> Mark
@@ -210,6 +227,56 @@ viewMark mark =
 
 
 
+---- DECODERS ---
+
+
+decodeReceivedCoordinate : Json.Value -> Msg
+decodeReceivedCoordinate json =
+    case decodeValue testDecoder json of
+        Ok value ->
+            value
+
+        Err error ->
+            CommunicationError "Whoops"
+
+
+testDecoder : Json.Decoder Msg
+testDecoder =
+    Json.succeed ReceivedMark
+        |> required "sign" markDecoder
+        |> required "coordinate" coordinateDecoder
+
+
+coordinateDecoder : Json.Decoder Coordinate
+coordinateDecoder =
+    Json.succeed Tuple.pair
+        |> required "x" Json.int
+        |> required "y" Json.int
+
+
+markDecoder : Json.Decoder Mark
+markDecoder =
+    Json.string
+        |> Json.andThen
+            (\markString ->
+                case String.toUpper markString of
+                    "X" ->
+                        Json.succeed X
+
+                    "O" ->
+                        Json.succeed O
+
+                    _ ->
+                        Json.fail ("Invalid sign: " ++ markString)
+            )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Ports.receiveCoordinate decodeReceivedCoordinate
+
+
+
 ---- PROGRAM ----
 
 
@@ -217,7 +284,7 @@ main : Program () Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> init
+        , init = always init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
