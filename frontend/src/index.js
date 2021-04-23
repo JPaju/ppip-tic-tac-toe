@@ -17,6 +17,6 @@ app.ports.sendCoordinate.subscribe(coordinate => {
 
   setTimeout(
     () => app.ports.receiveCoordinate.send(mark),
-    1500
+    1000
   )
 })

@@ -1,290 +1,151 @@
 module Main exposing (..)
 
-import Browser
-import Element exposing (Attribute, Element, centerX, centerY, column, el, fill, height, mouseOver, none, pointer, px, row, spacing, text, width)
+import Browser exposing (UrlRequest)
+import Browser.Navigation as Nav
+import Element exposing (Element, centerX, centerY, fill, height, layout, mouseOver, paddingXY, pointer, px, row, spacing, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
-import Element.Input as Input
-import Html exposing (Html)
-import Json.Decode as Json exposing (decodeValue, int)
-import Json.Decode.Pipeline exposing (required)
-import Matrix exposing (Coordinate, Matrix)
-import Ports
+import Page.OfflineGame as OfflineGame
+import Page.OnlineGame as OnlineGame
+import Route exposing (Route)
+import TicTacToe exposing (Sign(..))
 import Ui
-
-
-
----- GAME ----
-
-
-type Mark
-    = X
-    | O
-
-
-type alias Board =
-    Matrix (Maybe Mark)
-
-
-type GameResult
-    = Tie
-    | Won Mark
-
-
-type Game
-    = Finished Board GameResult
-    | OnGoing
-        { board : Board
-        , turn : Mark
-        }
-
-
-getBoard : Game -> Board
-getBoard game =
-    case game of
-        OnGoing { board } ->
-            board
-
-        Finished board _ ->
-            board
-
-
-
----- MODEL ----
+import Url exposing (Url)
 
 
 type alias Model =
-    { game : Game }
+    { navKey : Nav.Key
+    , page : Page
+    }
 
 
-initGame : Int -> Game
-initGame boardSize =
-    OnGoing
-        { board = Matrix.square boardSize (always Nothing)
-        , turn = X
-        }
+init : Url -> Nav.Key -> ( Model, Cmd Msg )
+init url key =
+    changeRoute (Route.fromUrl url) { navKey = key, page = Home }
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { game = initGame 5 }
-    , Cmd.none
-    )
-
-
-
----- UPDATE ----
+type Page
+    = Home
+    | Offline OfflineGame.Model
+    | Online OnlineGame.Model
 
 
 type Msg
-    = BoardClicked Matrix.Coordinate
-    | ResetGame
-    | ReceivedMark Mark Coordinate
-    | CommunicationError String
+    = LinkClicked UrlRequest
+    | UrlChanged Url
+    | OnlineMsg OnlineGame.Msg
+    | OfflineMsg OfflineGame.Msg
+
+
+changeRoute : Route -> Model -> ( Model, Cmd Msg )
+changeRoute route model =
+    case route of
+        Route.Root ->
+            ( model, Cmd.none )
+
+        Route.OfflineRoute ->
+            ( { model | page = Offline (OfflineGame.init 5) }, Cmd.none )
+
+        Route.OnlineRoute ->
+            let
+                ( subModel, subCmd ) =
+                    OnlineGame.init
+            in
+            ( { model | page = Online subModel }, Cmd.map OnlineMsg subCmd )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        BoardClicked coordinate ->
-            ( { model | game = updateGame model.game coordinate }
-            , Ports.sendCoordinate coordinate
-            )
+    case ( msg, model.page ) of
+        ( LinkClicked urlRequest, _ ) ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( model, Nav.pushUrl model.navKey (Url.toString url) )
 
-        ResetGame ->
-            ( { model | game = initGame 5 }, Cmd.none )
+                Browser.External extUrl ->
+                    ( model, Nav.load extUrl )
 
-        ReceivedMark mark coordinate ->
-            ( { model | game = updateGame model.game coordinate }, Cmd.none )
+        ( UrlChanged url, _ ) ->
+            changeRoute (Route.fromUrl url) model
 
-        CommunicationError desc ->
-            Debug.log "Invalid data:" ( model, Cmd.none )
+        ( OfflineMsg gameMsg, Offline gameModel ) ->
+            ( { model | page = Offline (OfflineGame.update gameMsg gameModel) }, Cmd.none )
 
+        ( OnlineMsg gameMsg, Online gameModel ) ->
+            let
+                ( newModel, cmd ) =
+                    OnlineGame.update gameMsg gameModel
+            in
+            ( { model | page = Online newModel }, Cmd.map OnlineMsg cmd )
 
-updateGame : Game -> Coordinate -> Game
-updateGame game coordinate =
-    case game of
-        OnGoing { board, turn } ->
-            OnGoing
-                { turn = changeTurn turn
-                , board = placeMark turn coordinate board
-                }
-
-        (Finished _ _) as finished ->
-            finished
+        ( _, _ ) ->
+            ( model, Cmd.none )
 
 
-placeMark : Mark -> Coordinate -> Board -> Board
-placeMark mark coordinate board =
-    Matrix.set coordinate (Just mark) board
-
-
-changeTurn : Mark -> Mark
-changeTurn mark =
-    case mark of
-        X ->
-            O
-
-        O ->
-            X
-
-
-
----- VIEW ----
-
-
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    Element.layout [ height fill, width fill ] <|
-        column [ centerX, centerY, spacing 50 ]
-            [ gameHeader model.game
-            , getBoard model.game |> viewBoard []
-            , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
-            ]
+    case model.page of
+        Offline offlineModel ->
+            pageLayout OfflineMsg (OfflineGame.view offlineModel)
+
+        Online onlineModel ->
+            pageLayout OnlineMsg (OnlineGame.view onlineModel)
+
+        Home ->
+            pageLayout never homePage
 
 
-gameHeader : Game -> Element msg
-gameHeader game =
-    row [ centerX, Font.size 38 ] <|
-        case game of
-            OnGoing { turn } ->
-                [ el [] (text "Turn: "), viewMark turn ]
-
-            Finished _ result ->
-                case result of
-                    Won winner ->
-                        [ viewMark winner, text " won!" ]
-
-                    Tie ->
-                        [ el [] (text "Tie!") ]
+pageLayout : (a -> msg) -> Element a -> Browser.Document msg
+pageLayout toMsg content =
+    { title = "The title"
+    , body =
+        [ layout [ height fill, width fill ] <| Element.map toMsg content ]
+    }
 
 
-viewBoard : List (Attribute Msg) -> Board -> Element Msg
-viewBoard attributes board =
-    column attributes
-        (board
-            |> Matrix.getRowsWithCoordinates
-            |> List.map viewRow
-        )
+homePage : Element msg
+homePage =
+    row [ width fill, centerX, centerY, spacing 20 ]
+        [ navLink "Play offline" "/offline"
+        , navLink "Play online" "/online"
+        ]
 
 
-viewRow : List ( Maybe Mark, Coordinate ) -> Element Msg
-viewRow columns =
-    columns
-        |> List.map boardCell
-        |> row []
-
-
-boardCell : ( Maybe Mark, Coordinate ) -> Element Msg
-boardCell ( maybeMark, coord ) =
-    let
-        size =
-            px 100
-
-        cellStyles =
-            [ height size, width size, Border.width 1 ]
-    in
-    case maybeMark of
-        Just mark ->
-            markedCell cellStyles mark
-
-        Nothing ->
-            emptyCell cellStyles coord
-
-
-emptyCell : List (Attribute Msg) -> Coordinate -> Element Msg
-emptyCell attributes coordinate =
-    Input.button (pointer :: mouseOver [ Background.color Ui.grey ] :: attributes)
-        { onPress = Just (BoardClicked coordinate)
-        , label = none
-        }
-
-
-markedCell : List (Attribute msg) -> Mark -> Element msg
-markedCell attributes mark =
-    Input.button (Ui.notAllowed :: attributes)
-        { onPress = Nothing
-        , label = viewMark mark
-        }
-
-
-viewMark : Mark -> Element msg
-viewMark mark =
-    let
-        icon =
-            case mark of
-                X ->
-                    '❌'
-
-                O ->
-                    '⭕'
-    in
-    icon
-        |> String.fromChar
-        |> text
-        |> el [ centerY, centerX, Font.size 36 ]
-
-
-
----- DECODERS ---
-
-
-decodeReceivedCoordinate : Json.Value -> Msg
-decodeReceivedCoordinate json =
-    case decodeValue testDecoder json of
-        Ok value ->
-            value
-
-        Err error ->
-            CommunicationError "Whoops"
-
-
-testDecoder : Json.Decoder Msg
-testDecoder =
-    Json.succeed ReceivedMark
-        |> required "sign" markDecoder
-        |> required "coordinate" coordinateDecoder
-
-
-coordinateDecoder : Json.Decoder Coordinate
-coordinateDecoder =
-    Json.succeed Tuple.pair
-        |> required "x" Json.int
-        |> required "y" Json.int
-
-
-markDecoder : Json.Decoder Mark
-markDecoder =
-    Json.string
-        |> Json.andThen
-            (\markString ->
-                case String.toUpper markString of
-                    "X" ->
-                        Json.succeed X
-
-                    "O" ->
-                        Json.succeed O
-
-                    _ ->
-                        Json.fail ("Invalid sign: " ++ markString)
-            )
+navLink : String -> String -> Element msg
+navLink label href =
+    Element.link
+        [ centerX
+        , width (px 300)
+        , Font.color Ui.white
+        , Font.center
+        , Font.size 32
+        , Background.color Ui.blue
+        , mouseOver [ Background.color Ui.black ]
+        , Border.rounded 10
+        , paddingXY 20 50
+        , pointer
+        ]
+        { url = href, label = Element.text label }
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Ports.receiveCoordinate decodeReceivedCoordinate
+subscriptions model =
+    case model.page of
+        Online _ ->
+            OnlineGame.subscriptions |> Sub.map OnlineMsg
 
-
-
----- PROGRAM ----
+        _ ->
+            Sub.none
 
 
 main : Program () Model Msg
 main =
-    Browser.element
-        { view = view
-        , init = always init
+    Browser.application
+        { init = always init
+        , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlRequest = LinkClicked
+        , onUrlChange = UrlChanged
         }

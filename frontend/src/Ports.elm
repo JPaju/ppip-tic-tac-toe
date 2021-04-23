@@ -4,6 +4,10 @@ import Json.Decode as Json
 import Matrix exposing (Coordinate)
 
 
+
+-- TODO Send mark and not coordinate
+
+
 port sendCoordinate : Coordinate -> Cmd msg
 
 
