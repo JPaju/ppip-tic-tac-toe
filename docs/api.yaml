@@ -14,12 +14,12 @@ channels:
       message:
         oneOf:
           - $ref: "#/components/messages/SearchingOpponent"
-          - $ref: "#/components/messages/OpponentDrew"
+          - $ref: "#/components/messages/MarkPlaced"
           - $ref: "#/components/messages/GameOn"
           - $ref: "#/components/messages/GameEnded"
     publish:
       message:
-        $ref: "#/components/messages/DrawChip"
+        $ref: "#/components/messages/PlaceMark"
 
 components:
   messages:
@@ -30,12 +30,12 @@ components:
           waiting:
             type: string
 
-    OpponentDrew:
+    MarkPlaced:
       payload:
         type: object
         properties:
-          theirDraw:
-            $ref: "#/components/schemas/Chip"
+          newMark:
+            $ref: "#/components/schemas/Mark"
           currentBoard:
             $ref: "#/components/schemas/Board"
 
@@ -43,6 +43,10 @@ components:
       payload:
         type: object
         properties:
+          yourSign:
+            $ref: "#/components/schemas/Sign"
+          nowHasTurn:
+            $ref: "#/components/schemas/Sign"
           currentBoard:
             $ref: "#/components/schemas/Board"
 
@@ -50,20 +54,22 @@ components:
       payload:
         type: object
         properties:
+          board:
+            $ref: "#/components/schemas/Board"
           result:
-            enum:
-              - won
-              - lost
+            oneOf:
+              - $ref: "#/components/schemas/Sign"
+              - $ref: "#/components/schemas/Tie"
 
-    DrawChip:
+    PlaceMark:
       payload:
-        $ref: "#/components/schemas/Coordinate"
+        $ref: "#/components/schemas/Mark"
 
   schemas:
     Board:
       type: array
       items:
-        $ref: "#/components/schemas/Chip"
+        $ref: "#/components/schemas/Mark"
 
     Coordinate:
       type: object
@@ -73,13 +79,21 @@ components:
         y:
           type: integer
 
-    Chip:
+    Mark:
       type: object
       properties:
         coordinate:
           $ref: "#/components/schemas/Coordinate"
         sign:
-          type: string
-          enum:
-            - cross
-            - circle
+          $ref: "#/components/schemas/Sign"
+
+    Sign:
+      type: string
+      enum:
+        - X
+        - O
+
+    Tie:
+      type: string
+      enum:
+        - Tie
