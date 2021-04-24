@@ -1,10 +1,19 @@
-module Matrix exposing (Coordinate, Matrix, get, getRows, getRowsWithCoordinates, set, square)
+module Matrix exposing (Coordinate, Dimensions, Matrix, create, fromList, get, getRows, getRowsWithCoordinates, set, square)
 
 import Array exposing (Array)
+import Dict
+import Html.Attributes exposing (height, width)
+import Util exposing (flip)
 
 
 type alias Coordinate =
     ( Int, Int )
+
+
+type alias Dimensions =
+    { height : Int
+    , width : Int
+    }
 
 
 type Matrix a
@@ -15,10 +24,24 @@ type Matrix a
 ---- CREATE ----
 
 
-square : Int -> (Coordinate -> a) -> Matrix a
-square size toElement =
-    Array.initialize size (createRow size toElement)
+create : Dimensions -> (Coordinate -> a) -> Matrix a
+create { height, width } toElement =
+    Array.initialize height (createRow width toElement)
         |> Matrix
+
+
+square : Int -> (Coordinate -> a) -> Matrix a
+square size =
+    create { height = size, width = size }
+
+
+fromList : Dimensions -> List ( Coordinate, a ) -> Matrix (Maybe a)
+fromList dimensions values =
+    let
+        byCoordinates =
+            Dict.fromList values
+    in
+    create dimensions (flip Dict.get byCoordinates)
 
 
 

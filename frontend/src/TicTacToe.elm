@@ -1,10 +1,27 @@
-module TicTacToe exposing (Board, Mark, Sign(..), changeTurn, initBoard, placeMark, viewBoard, viewSign)
+module TicTacToe exposing
+    ( Board
+    , Mark
+    , Sign(..)
+    , boardDecoder
+    , changeTurn
+    , createBoard
+    , markDecoder
+    , markEncoder
+    , placeMark
+    , signDecoder
+    , viewBoard
+    , viewSign
+    )
 
 import Element exposing (Attribute, Element, centerX, centerY, column, el, height, mouseOver, none, pointer, px, row, text, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import Html exposing (mark)
+import Json.Decode as Decode exposing (Decoder, int, list)
+import Json.Decode.Pipeline exposing (required)
+import Json.Encode as Encode
 import Matrix exposing (Coordinate, Matrix)
 import Ui
 
@@ -24,9 +41,12 @@ type Board
     = Board (Matrix (Maybe Sign))
 
 
-initBoard : Int -> Board
-initBoard boardSize =
-    Matrix.square boardSize (always Nothing) |> Board
+createBoard : Matrix.Dimensions -> List Mark -> Board
+createBoard dimensions marks =
+    marks
+        |> List.map (\{ location, sign } -> ( location, sign ))
+        |> Matrix.fromList dimensions
+        |> Board
 
 
 placeMark : Mark -> Board -> Board
@@ -59,8 +79,8 @@ viewBoard attributes toMsg (Board board) =
         )
 
 
-viewSign : Sign -> Element msg
-viewSign sign =
+viewSign : List (Attribute msg) -> Sign -> Element msg
+viewSign attributes sign =
     let
         icon =
             case sign of
@@ -73,7 +93,94 @@ viewSign sign =
     icon
         |> String.fromChar
         |> text
-        |> el [ centerY, centerX, Font.size 36 ]
+        |> el (attributes ++ [ centerY, centerX, Font.size 36 ])
+
+
+
+---- ENCODE ----
+
+
+markEncoder : Mark -> Encode.Value
+markEncoder { sign, location } =
+    Encode.object
+        [ ( "coordinate", coordinateEncoder location )
+        , ( "sign", signEncoder sign )
+        ]
+
+
+coordinateEncoder : Coordinate -> Encode.Value
+coordinateEncoder ( x, y ) =
+    Encode.object
+        [ ( "x", Encode.int x )
+        , ( "y", Encode.int y )
+        ]
+
+
+signEncoder : Sign -> Decode.Value
+signEncoder sign =
+    Encode.string <|
+        case sign of
+            X ->
+                "X"
+
+            O ->
+                "O"
+
+
+
+---- DECODE ----
+
+
+boardDecoder : Decoder Board
+boardDecoder =
+    let
+        dimensionsDecoder =
+            Decode.succeed Matrix.Dimensions
+                |> required "height" int
+                |> required "width" int
+
+        marksDecoder =
+            list markDecoder
+    in
+    Decode.succeed createBoard
+        |> required "dimensions" dimensionsDecoder
+        |> required "marks" marksDecoder
+
+
+
+-- Decode.succeed (Matrix.create (Matrix.Dimensions 3 5) (always Nothing))
+--     |> Decode.map Board
+
+
+markDecoder : Decoder Mark
+markDecoder =
+    Decode.succeed Mark
+        |> required "sign" signDecoder
+        |> required "coordinate" coordinateDecoder
+
+
+coordinateDecoder : Decoder Coordinate
+coordinateDecoder =
+    Decode.succeed Tuple.pair
+        |> required "x" Decode.int
+        |> required "y" Decode.int
+
+
+signDecoder : Decoder Sign
+signDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\signString ->
+                case String.toUpper signString of
+                    "X" ->
+                        Decode.succeed X
+
+                    "O" ->
+                        Decode.succeed O
+
+                    _ ->
+                        Decode.fail ("Invalid sign: " ++ signString)
+            )
 
 
 
@@ -116,5 +223,5 @@ markedCell : List (Attribute msg) -> Sign -> Element msg
 markedCell attributes sign =
     Input.button (Ui.notAllowed :: attributes)
         { onPress = Nothing
-        , label = viewSign sign
+        , label = viewSign [] sign
         }

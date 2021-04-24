@@ -1,6 +1,7 @@
-module Ui exposing (black, blue, button, grey, notAllowed, red, white)
+module Ui exposing (black, blue, button, grey, loadingSpinner, notAllowed, pageHeaderStyle, red, white)
 
 import Element exposing (Attribute, Color, Element, el)
+import Element.Font as Font
 import Html.Attributes
 import Widget exposing (textButton)
 import Widget.Material as Material
@@ -36,6 +37,15 @@ white =
 
 
 
+---- TEXT ----
+
+
+pageHeaderStyle : List (Attribute msg)
+pageHeaderStyle =
+    [ Font.semiBold, Font.size 32 ]
+
+
+
 ---- CURSOR ----
 
 
@@ -67,3 +77,18 @@ button attrs { label, enabled, onClick } =
                 else
                     Nothing
             }
+
+
+
+---- SPINNER ----
+
+
+spinnerStyles : Widget.ProgressIndicatorStyle msg
+spinnerStyles =
+    Material.progressIndicator Material.defaultPalette
+
+
+loadingSpinner : List (Attribute msg) -> Element msg
+loadingSpinner attrs =
+    Widget.circularProgressIndicator spinnerStyles Nothing
+        |> el attrs

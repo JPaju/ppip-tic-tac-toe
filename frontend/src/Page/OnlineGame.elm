@@ -1,27 +1,21 @@
 module Page.OnlineGame exposing (Model(..), Msg, init, subscriptions, update, view)
 
-import Element exposing (Element, alignTop, centerX, centerY, column, el, spacing, text)
-import Element.Font exposing (center)
-import Json.Decode as Decode exposing (Decoder)
+import Element exposing (Attribute, Element, alignRight, alignTop, alpha, centerX, centerY, column, el, fill, height, inFront, none, paragraph, row, scale, spacing, text, width)
+import Element.Background as Background
+import Element.Font as Font
+import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Decode.Pipeline exposing (required)
-import Matrix exposing (Coordinate, Matrix)
-import Ports exposing (sendCoordinate)
-import Process
-import Task
-import TicTacToe exposing (Board, Mark, Sign(..), changeTurn, placeMark)
+import Matrix exposing (Coordinate)
+import Ports
+import TicTacToe exposing (Board, Mark, Sign(..), boardDecoder, changeTurn, markDecoder, markEncoder, signDecoder, viewSign)
 import Ui
+import Util
 
 
-type Msg
-    = GameStarted
-    | BoardClicked Coordinate
-    | ReceivedMark Mark
-    | CommunicationError String
-
-
-type Winner
-    = You
-    | Opponent
+type GameResult
+    = Won
+    | Lost
+    | Draw
 
 
 type alias Game =
@@ -32,132 +26,259 @@ type alias Game =
 
 
 type Model
-    = SearchingOpponent
+    = Connecting
+    | SearchingOpponent
     | GameOn Game
-    | GameEnded Board Winner
+    | FinishedGame Board GameResult
+    | Error String
 
 
-boardSize =
-    5
-
-
-loadingDelaySeconds =
-    2 * 1000
+type Msg
+    = NewGameClicked
+    | CellClicked Coordinate
+    | ConnectedToServer
+    | GameStarted Game
+    | ReceivedMark Mark
+    | GameEnded Board GameResult
+    | CommunicationError String
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( SearchingOpponent, Process.sleep loadingDelaySeconds |> Task.perform (always GameStarted) )
-
-
-initGame : Game
-initGame =
-    { board = TicTacToe.initBoard boardSize
-    , yourSign = O
-    , hasTurn = O
-    }
+    ( Connecting
+    , Ports.debugPort "connect"
+    )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model ) of
-        ( GameStarted, _ ) ->
-            ( GameOn initGame, Cmd.none )
+    case msg of
+        GameStarted game ->
+            ( GameOn game, Cmd.none )
 
-        ( BoardClicked coordinate, GameOn ({ yourSign, hasTurn, board } as game) ) ->
-            if hasTurn == yourSign then
-                ( GameOn
-                    { game
-                        | hasTurn = TicTacToe.changeTurn hasTurn
-                        , board = TicTacToe.placeMark { sign = yourSign, location = coordinate } board
-                    }
-                , Ports.sendCoordinate coordinate
-                )
+        CellClicked coordinate ->
+            case model of
+                GameOn ({ yourSign, hasTurn, board } as game) ->
+                    if hasTurn == yourSign then
+                        ( GameOn
+                            { game
+                                | hasTurn = TicTacToe.changeTurn hasTurn
+                                , board = TicTacToe.placeMark (Mark yourSign coordinate) board
+                            }
+                        , Mark yourSign coordinate
+                            |> markEncoder
+                            |> Ports.sendMark
+                        )
 
-            else
-                ( model, Cmd.none )
+                    else
+                        ( model, Cmd.none )
 
-        ( ReceivedMark mark, GameOn ({ hasTurn, board } as game) ) ->
-            ( GameOn
-                { game
-                    | hasTurn = changeTurn hasTurn
-                    , board = TicTacToe.placeMark mark board
-                }
-            , Cmd.none
-            )
+                _ ->
+                    ( model, Cmd.none )
 
-        ( CommunicationError err, _ ) ->
-            ( Debug.log ("Error: " ++ err) model, Cmd.none )
+        ReceivedMark mark ->
+            case model of
+                GameOn ({ hasTurn, board } as game) ->
+                    ( GameOn
+                        { game
+                            | hasTurn = changeTurn hasTurn
+                            , board = TicTacToe.placeMark mark board
+                        }
+                    , Cmd.none
+                    )
 
-        ( _, _ ) ->
-            ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
+
+        CommunicationError err ->
+            ( Error err, Cmd.none )
+
+        ConnectedToServer ->
+            ( SearchingOpponent, Ports.debugPort "searchOpponent" )
+
+        GameEnded board result ->
+            ( FinishedGame board result, Cmd.none )
+
+        NewGameClicked ->
+            init
+
+
+
+---- VIEW ----
 
 
 view : Model -> Element Msg
 view model =
     column [ centerX, centerY, spacing 50 ] <|
         case model of
+            Connecting ->
+                viewLoading [ centerX ] "Connecting to the server"
+
             SearchingOpponent ->
-                [ el [ centerX, alignTop ] (text "Searching opponents")
-                , el [ centerX, centerY ] (text "Wait a second or two")
+                viewLoading [ centerX ] "Searching opponents"
+
+            GameOn { board, yourSign, hasTurn } ->
+                let
+                    yourTurn =
+                        yourSign == hasTurn
+
+                    overlay =
+                        if yourTurn then
+                            none
+
+                        else
+                            boardOverlay "Waiting for the opponent to make a move"
+                in
+                [ viewTurn yourTurn
+                , board |> TicTacToe.viewBoard [ inFront overlay ] CellClicked
+                , viewMarks yourSign
                 ]
 
-            GameOn _ ->
-                [ el [ centerX, alignTop ] (text "Now Playing")
-                , el [ centerX, centerY ] (text "Game started!")
+            FinishedGame board winner ->
+                let
+                    winnerText =
+                        case winner of
+                            Won ->
+                                "You Won! 🏆"
+
+                            Lost ->
+                                "You lost! 😞"
+
+                            Draw ->
+                                "It's a Draw! 🤷"
+                in
+                [ el (centerX :: alignTop :: Ui.pageHeaderStyle) (text "Game ended")
+                , board |> TicTacToe.viewBoard [ inFront (boardOverlay winnerText) ] CellClicked
+                , Ui.button [ centerX ] { label = "New game", onClick = NewGameClicked, enabled = True }
                 ]
 
-            GameEnded _ _ ->
-                [ el [ centerX, alignTop ] (text "Header")
-                , el [ centerX, centerY ] (text "Game ended")
+            Error err ->
+                Debug.log ("Error: " ++ err)
+                    [ el (centerX :: centerY :: Ui.pageHeaderStyle) (text "Whoops... Something went wrong")
+                    , el [ centerX, Font.size 100 ] (text "💥")
+                    ]
+
+
+viewLoading : List (Attribute msg) -> String -> List (Element msg)
+viewLoading attributes message =
+    [ el (Ui.pageHeaderStyle ++ attributes) (text message)
+    , Ui.loadingSpinner [ centerX ]
+    ]
+
+
+viewTurn : Bool -> Element Msg
+viewTurn yourTurn =
+    let
+        headerText =
+            if yourTurn then
+                "Your turn"
+
+            else
+                "Opponent's turn"
+    in
+    el (centerX :: alignTop :: Ui.pageHeaderStyle) (text headerText)
+
+
+viewMarks : Sign -> Element Msg
+viewMarks yourSign =
+    let
+        markRow label sign =
+            row [ width fill ]
+                [ el [ width fill ] (text label)
+                , viewSign [ scale 0.5, alignRight ] sign
                 ]
+    in
+    column [ centerX ]
+        [ markRow "You: " yourSign
+        , markRow "Opponent: " (changeTurn yourSign)
+        ]
+
+
+boardOverlay : String -> Element msg
+boardOverlay label =
+    el
+        [ height fill
+        , width fill
+        , Background.color Ui.grey
+        , alpha 0.8
+        ]
+        (paragraph
+            [ centerX, centerY, Font.size 28, Font.center ]
+            [ text label ]
+        )
 
 
 subscriptions : Sub Msg
 subscriptions =
-    Ports.receiveCoordinate decodeReceivedMark
+    Ports.receiveGameMessage decodeGameMessage
 
 
 
----- DECODER ----
+---- DECODE ----
 
 
-decodeReceivedMark : Decode.Value -> Msg
-decodeReceivedMark json =
-    case Decode.decodeValue markDecoder json of
-        Ok mark ->
-            ReceivedMark mark
-
-        Err error ->
-            CommunicationError (Decode.errorToString error)
+decodeGameMessage : Decode.Value -> Msg
+decodeGameMessage json =
+    Decode.decodeValue gameMsgDecoder json
+        |> Util.foldResult (Decode.errorToString >> CommunicationError) identity
 
 
-markDecoder : Decoder Mark
-markDecoder =
-    Decode.succeed Mark
-        |> required "sign" signDecoder
-        |> required "coordinate" coordinateDecoder
+gameMsgDecoder : Decoder Msg
+gameMsgDecoder =
+    Decode.oneOf
+        [ connectedDecoder
+        , gameStartedDecoder
+        , newMarkDecoder
+        , gameEndedDecoder
+        ]
 
 
-coordinateDecoder : Decoder Coordinate
-coordinateDecoder =
-    Decode.succeed Tuple.pair
-        |> required "x" Decode.int
-        |> required "y" Decode.int
+connectedDecoder : Decoder Msg
+connectedDecoder =
+    field "waiting" string
+        |> Decode.andThen (\_ -> Decode.succeed ConnectedToServer)
 
 
-signDecoder : Decoder Sign
-signDecoder =
-    Decode.string
+gameStartedDecoder : Decoder Msg
+gameStartedDecoder =
+    let
+        gameDecoder =
+            Decode.succeed Game
+                |> required "board" boardDecoder
+                |> required "yourSign" signDecoder
+                |> required "nowHasTurn" signDecoder
+    in
+    Decode.map GameStarted gameDecoder
+
+
+newMarkDecoder : Decoder Msg
+newMarkDecoder =
+    Decode.succeed ReceivedMark
+        |> required "newMark" markDecoder
+
+
+gameEndedDecoder : Decoder Msg
+gameEndedDecoder =
+    Decode.succeed GameEnded
+        |> required "board" boardDecoder
+        |> required "result" resultDecoder
+
+
+resultDecoder : Decoder GameResult
+resultDecoder =
+    string
         |> Decode.andThen
-            (\signString ->
-                case String.toUpper signString of
-                    "X" ->
-                        Decode.succeed X
+            (\resultString ->
+                case String.toUpper resultString of
+                    "WON" ->
+                        Decode.succeed Won
 
-                    "O" ->
-                        Decode.succeed O
+                    "LOST" ->
+                        Decode.succeed Lost
+
+                    "TIE" ->
+                        Decode.succeed Draw
 
                     _ ->
-                        Decode.fail ("Invalid sign: " ++ signString)
+                        Decode.fail ("Invalid result: " ++ resultString)
             )

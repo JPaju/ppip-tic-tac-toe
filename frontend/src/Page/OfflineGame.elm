@@ -3,7 +3,7 @@ module Page.OfflineGame exposing (..)
 import Element exposing (Element, centerX, centerY, column, el, row, spacing, text)
 import Element.Font as Font
 import Matrix exposing (Coordinate)
-import TicTacToe as Game exposing (Board, Sign(..), changeTurn, initBoard, placeMark)
+import TicTacToe exposing (Board, Sign(..), changeTurn, createBoard, placeMark)
 import Ui
 
 
@@ -42,7 +42,7 @@ type alias Model =
 initGame : Int -> Game
 initGame boardSize =
     OnGoing
-        { board = initBoard boardSize
+        { board = createBoard (Matrix.Dimensions boardSize boardSize) []
         , hasTurn = X
         }
 
@@ -77,25 +77,24 @@ updateGame game coordinate =
 
 view : Model -> Element Msg
 view model =
-    -- Element.layout [ height fill, width fill ] <|
     column [ centerX, centerY, spacing 50 ]
         [ gameHeader model.game
-        , getBoard model.game |> Game.viewBoard [] BoardClicked
+        , getBoard model.game |> TicTacToe.viewBoard [] BoardClicked
         , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
         ]
 
 
 gameHeader : Game -> Element msg
 gameHeader game =
-    row [ centerX, Font.size 38 ] <|
+    row (centerX :: Ui.pageHeaderStyle) <|
         case game of
             OnGoing { hasTurn } ->
-                [ el [] (text "Turn: "), Game.viewSign hasTurn ]
+                [ el [] (text "Turn: "), TicTacToe.viewSign [] hasTurn ]
 
             Finished _ result ->
                 case result of
                     Won winner ->
-                        [ Game.viewSign winner, text " won!" ]
+                        [ TicTacToe.viewSign [] winner, text " won!" ]
 
                     Tie ->
                         [ el [] (text "Tie!") ]

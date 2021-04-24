@@ -42,7 +42,7 @@ changeRoute : Route -> Model -> ( Model, Cmd Msg )
 changeRoute route model =
     case route of
         Route.Root ->
-            ( model, Cmd.none )
+            ( { model | page = Home }, Cmd.none )
 
         Route.OfflineRoute ->
             ( { model | page = Offline (OfflineGame.init 5) }, Cmd.none )

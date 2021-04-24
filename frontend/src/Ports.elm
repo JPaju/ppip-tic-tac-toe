@@ -1,14 +1,17 @@
-port module Ports exposing (receiveCoordinate, sendCoordinate)
+port module Ports exposing (debugPort, receiveGameMessage, sendMark)
 
-import Json.Decode as Json
-import Matrix exposing (Coordinate)
-
-
-
--- TODO Send mark and not coordinate
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 
-port sendCoordinate : Coordinate -> Cmd msg
+port sendMark : Encode.Value -> Cmd msg
 
 
-port receiveCoordinate : (Json.Value -> msg) -> Sub msg
+port receiveGameMessage : (Decode.Value -> msg) -> Sub msg
+
+
+
+-- TODO REMOVE
+
+
+port debugPort : String -> Cmd msg

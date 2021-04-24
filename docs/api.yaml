@@ -36,7 +36,7 @@ components:
         properties:
           newMark:
             $ref: "#/components/schemas/Mark"
-          currentBoard:
+          board:
             $ref: "#/components/schemas/Board"
 
     GameOn:
@@ -47,7 +47,7 @@ components:
             $ref: "#/components/schemas/Sign"
           nowHasTurn:
             $ref: "#/components/schemas/Sign"
-          currentBoard:
+          board:
             $ref: "#/components/schemas/Board"
 
     GameEnded:
@@ -57,9 +57,7 @@ components:
           board:
             $ref: "#/components/schemas/Board"
           result:
-            oneOf:
-              - $ref: "#/components/schemas/Sign"
-              - $ref: "#/components/schemas/Tie"
+            $ref: "#/components/schemas/Result"
 
     PlaceMark:
       payload:
@@ -67,9 +65,12 @@ components:
 
   schemas:
     Board:
-      type: array
-      items:
-        $ref: "#/components/schemas/Mark"
+      type: object
+      properties:
+        dimensions:
+          $ref: "#/components/schemas/Dimensions"
+        marks:
+          $ref: "#/components/schemas/Mark"
 
     Coordinate:
       type: object
@@ -87,13 +88,23 @@ components:
         sign:
           $ref: "#/components/schemas/Sign"
 
+    Dimensions:
+      type: object
+      properties:
+        height:
+          type: integer
+        width:
+          type: integer
+
     Sign:
       type: string
       enum:
         - X
         - O
 
-    Tie:
+    Result:
       type: string
       enum:
+        - Won
+        - Lost
         - Tie
