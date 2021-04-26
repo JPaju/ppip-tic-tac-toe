@@ -1,7 +1,6 @@
-module Util exposing (filterMaybe, flip, foldResult, groupBy, hasValue, traverseFirst)
+module Util exposing (flip, foldResult, groupBy, hasValue)
 
 import Dict exposing (Dict)
-import Html exposing (a, b)
 
 
 
@@ -39,23 +38,6 @@ hasValue maybe =
 
         Nothing ->
             False
-
-
-filterMaybe : (a -> Bool) -> Maybe a -> Maybe a
-filterMaybe pred =
-    Maybe.andThen
-        (\a ->
-            if pred a then
-                Just a
-
-            else
-                Nothing
-        )
-
-
-traverseFirst : ( Maybe a, b ) -> Maybe ( a, b )
-traverseFirst ( ma, b ) =
-    Maybe.map (\a -> ( a, b )) ma
 
 
 

@@ -1,19 +1,22 @@
 module TicTacToe.Board exposing
     ( Board
+    , checkWinner
     , create
     , decoder
+    , isFull
+    , overlay
     , placeMark
     , view
     )
 
-import Dict
-import Element exposing (Attribute, Element, column, height, mouseOver, none, pointer, px, row, width)
+import Element exposing (Attribute, Element, alpha, centerX, centerY, column, el, fill, height, mouseOver, none, paragraph, pointer, px, row, text, width)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Font as Font
 import Element.Input as Input
 import Json.Decode as Decode exposing (Decoder, int, list)
 import Json.Decode.Pipeline exposing (required)
-import TicTacToe.Coordinate as Coordinate exposing (Coordinate)
+import TicTacToe.Coordinate exposing (Coordinate)
 import TicTacToe.Mark as Mark exposing (Mark)
 import TicTacToe.Matrix as Matrix exposing (Matrix)
 import TicTacToe.Sign as Sign exposing (Sign(..))
@@ -23,6 +26,10 @@ import Util
 
 type Board
     = Board (Matrix (Maybe Sign))
+
+
+
+---- CREATE & MODIFY ----
 
 
 create : Matrix.Dimensions -> List Mark -> Board
@@ -39,6 +46,61 @@ placeMark { sign, location } (Board board) =
         |> Board
 
 
+
+---- RULES ----
+
+
+isFull : Board -> Bool
+isFull board =
+    let
+        matrix =
+            getMatrix board
+
+        markCount =
+            matrix
+                |> Matrix.getAllElements
+                |> List.filter Util.hasValue
+                |> List.length
+    in
+    markCount == Matrix.getCapacity matrix
+
+
+checkWinner : Board -> Maybe Sign
+checkWinner board =
+    let
+        neededToWin =
+            consiquentMarksNeededToWin board
+
+        isWinner =
+            \sign -> hasMarksInRow sign neededToWin board
+    in
+    if isWinner X then
+        Just X
+
+    else if isWinner O then
+        Just O
+
+    else
+        Nothing
+
+
+consiquentMarksNeededToWin : Board -> Int
+consiquentMarksNeededToWin board =
+    let
+        matrix =
+            getMatrix board
+
+        shorterDimension =
+            min (Matrix.getHeight matrix) (Matrix.getWidth matrix)
+    in
+    if shorterDimension < 5 then
+        3
+
+    else
+        4
+
+
+
 ---- VIEW ----
 
 
@@ -49,6 +111,20 @@ view attributes toMsg (Board board) =
             |> Matrix.getRowsWithCoordinates
             |> List.map viewRow
             |> List.map (Element.map toMsg)
+        )
+
+
+overlay : String -> Element msg
+overlay label =
+    el
+        [ height fill
+        , width fill
+        , Background.color Ui.grey
+        , alpha 0.8
+        ]
+        (paragraph
+            [ centerX, centerY, Font.size 28, Font.center ]
+            [ text label ]
         )
 
 
@@ -111,3 +187,29 @@ markedCell attributes sign =
         { onPress = Nothing
         , label = Sign.view [] sign
         }
+
+
+getMatrix : Board -> Matrix (Maybe Sign)
+getMatrix (Board matrix) =
+    matrix
+
+
+hasMarksInRow : Sign -> Int -> Board -> Bool
+hasMarksInRow signToCheck count board =
+    let
+        predicate =
+            \sign -> sign == signToCheck
+
+        matrix =
+            getMatrix board
+
+        vertically =
+            Matrix.nConsecutiveVertically count (Maybe.map predicate >> Maybe.withDefault False)
+
+        horizontally =
+            Matrix.nConsecutiveHorizontally count (Maybe.map predicate >> Maybe.withDefault False)
+
+        diagonally =
+            Matrix.nConsecutiveDiagonally count (Maybe.map predicate >> Maybe.withDefault False)
+    in
+    vertically matrix || horizontally matrix || diagonally matrix

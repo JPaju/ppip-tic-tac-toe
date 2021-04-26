@@ -1,7 +1,6 @@
 module Page.OnlineGame exposing (Model(..), Msg, init, subscriptions, update, view)
 
-import Element exposing (Attribute, Element, alignRight, alignTop, alpha, centerX, centerY, column, el, fill, height, inFront, none, paragraph, row, scale, spacing, text, width)
-import Element.Background as Background
+import Element exposing (Attribute, Element, alignRight, alignTop, centerX, centerY, column, el, fill, inFront, none, row, scale, spacing, text, width)
 import Element.Font as Font
 import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Decode.Pipeline exposing (required)
@@ -129,7 +128,7 @@ view model =
                             none
 
                         else
-                            boardOverlay "Waiting for the opponent to make a move"
+                            Board.overlay "Waiting for the opponent to make a move"
                 in
                 [ viewTurn yourTurn
                 , board |> Board.view [ inFront overlay ] CellClicked
@@ -150,7 +149,7 @@ view model =
                                 "It's a Draw! 🤷"
                 in
                 [ el (centerX :: alignTop :: Ui.pageHeaderStyle) (text "Game ended")
-                , board |> Board.view [ inFront (boardOverlay winnerText) ] CellClicked
+                , board |> Board.view [ inFront (Board.overlay winnerText) ] CellClicked
                 , Ui.button [ centerX ] { label = "New game", onClick = NewGameClicked, enabled = True }
                 ]
 
@@ -194,20 +193,6 @@ viewMarks yourSign =
         [ markRow "You: " yourSign
         , markRow "Opponent: " (Sign.change yourSign)
         ]
-
-
-boardOverlay : String -> Element msg
-boardOverlay label =
-    el
-        [ height fill
-        , width fill
-        , Background.color Ui.grey
-        , alpha 0.8
-        ]
-        (paragraph
-            [ centerX, centerY, Font.size 28, Font.center ]
-            [ text label ]
-        )
 
 
 subscriptions : Sub Msg

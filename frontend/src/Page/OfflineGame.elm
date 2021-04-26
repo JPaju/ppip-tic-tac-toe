@@ -1,11 +1,15 @@
-module Page.OfflineGame exposing (..)
+module Page.OfflineGame exposing (Model, Msg, init, update, view)
 
-import Element exposing (Element, centerX, centerY, column, el, row, spacing, text)
+import Element exposing (Element, centerX, centerY, column, el, inFront, row, spacing, text)
 import TicTacToe.Board as Board exposing (Board)
 import TicTacToe.Coordinate exposing (Coordinate)
 import TicTacToe.Matrix as Matrix
 import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
+
+
+
+-- TODO: Let user choose the size of the board
 
 
 type Game
@@ -26,18 +30,8 @@ type Msg
     | ResetGame
 
 
-getBoard : Game -> Board
-getBoard game =
-    case game of
-        OnGoing { board } ->
-            board
-
-        Finished board _ ->
-            board
-
-
 type alias Model =
-    { game : Game }
+    Game
 
 
 initGame : Int -> Game
@@ -50,37 +44,67 @@ initGame boardSize =
 
 init : Int -> Model
 init boardSize =
-    { game = initGame boardSize }
+    initGame boardSize
+
+
+
+---- UPDATE ----
 
 
 update : Msg -> Model -> Model
-update msg model =
+update msg game =
     case msg of
         BoardClicked coordinate ->
-            { model | game = updateGame model.game coordinate }
+            case game of
+                OnGoing { board, hasTurn } ->
+                    let
+                        newBoard =
+                            Board.placeMark { sign = hasTurn, location = coordinate } board
+                    in
+                    updateGame newBoard hasTurn
+
+                (Finished _ _) as finished ->
+                    finished
 
         ResetGame ->
-            { model | game = initGame 5 }
+            initGame 5
 
 
-updateGame : Game -> Coordinate -> Game
-updateGame game coordinate =
-    case game of
-        OnGoing { board, hasTurn } ->
-            OnGoing
-                { hasTurn = Sign.change hasTurn
-                , board = Board.placeMark { sign = hasTurn, location = coordinate } board
-                }
+updateGame : Board -> Sign -> Game
+updateGame board hasTurn =
+    let
+        boardFull =
+            Board.isFull board
+    in
+    if boardFull then
+        Finished board Tie
 
-        (Finished _ _) as finished ->
-            finished
+    else
+        case Board.checkWinner board of
+            Just winner ->
+                Finished board (Won winner)
+
+            Nothing ->
+                OnGoing
+                    { hasTurn = Sign.change hasTurn
+                    , board = board
+                    }
+
+
+
+---- VIEW ----
 
 
 view : Model -> Element Msg
-view model =
+view game =
     column [ centerX, centerY, spacing 50 ]
-        [ gameHeader model.game
-        , getBoard model.game |> Board.view [] BoardClicked
+        [ gameHeader game
+        , case game of
+            OnGoing { board } ->
+                Board.view [] BoardClicked board
+
+            Finished board result ->
+                Board.view [ inFront (gameEndedText result |> Board.overlay) ] BoardClicked board
         , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
         ]
 
@@ -99,3 +123,20 @@ gameHeader game =
 
                     Tie ->
                         [ el [] (text "Tie!") ]
+
+
+gameEndedText : GameResult -> String
+gameEndedText result =
+    let
+        resultText =
+            case result of
+                Tie ->
+                    "It's a Tie"
+
+                Won X ->
+                    "Crosses won!"
+
+                Won O ->
+                    "Circles were victorious"
+    in
+    "Game ended! " ++ resultText
