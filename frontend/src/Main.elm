@@ -9,7 +9,6 @@ import Element.Font as Font
 import Page.OfflineGame as OfflineGame
 import Page.OnlineGame as OnlineGame
 import Route exposing (Route)
-import TicTacToe exposing (Sign(..))
 import Ui
 import Url exposing (Url)
 

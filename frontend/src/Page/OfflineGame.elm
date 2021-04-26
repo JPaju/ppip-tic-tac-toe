@@ -1,9 +1,10 @@
 module Page.OfflineGame exposing (..)
 
 import Element exposing (Element, centerX, centerY, column, el, row, spacing, text)
-import Element.Font as Font
-import Matrix exposing (Coordinate)
-import TicTacToe exposing (Board, Sign(..), changeTurn, createBoard, placeMark)
+import TicTacToe.Board as Board exposing (Board)
+import TicTacToe.Coordinate exposing (Coordinate)
+import TicTacToe.Matrix as Matrix
+import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
 
 
@@ -42,7 +43,7 @@ type alias Model =
 initGame : Int -> Game
 initGame boardSize =
     OnGoing
-        { board = createBoard (Matrix.Dimensions boardSize boardSize) []
+        { board = Board.create (Matrix.Dimensions boardSize boardSize) []
         , hasTurn = X
         }
 
@@ -67,8 +68,8 @@ updateGame game coordinate =
     case game of
         OnGoing { board, hasTurn } ->
             OnGoing
-                { hasTurn = changeTurn hasTurn
-                , board = placeMark { sign = hasTurn, location = coordinate } board
+                { hasTurn = Sign.change hasTurn
+                , board = Board.placeMark { sign = hasTurn, location = coordinate } board
                 }
 
         (Finished _ _) as finished ->
@@ -79,7 +80,7 @@ view : Model -> Element Msg
 view model =
     column [ centerX, centerY, spacing 50 ]
         [ gameHeader model.game
-        , getBoard model.game |> TicTacToe.viewBoard [] BoardClicked
+        , getBoard model.game |> Board.view [] BoardClicked
         , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
         ]
 
@@ -89,12 +90,12 @@ gameHeader game =
     row (centerX :: Ui.pageHeaderStyle) <|
         case game of
             OnGoing { hasTurn } ->
-                [ el [] (text "Turn: "), TicTacToe.viewSign [] hasTurn ]
+                [ el [] (text "Turn: "), Sign.view [] hasTurn ]
 
             Finished _ result ->
                 case result of
                     Won winner ->
-                        [ TicTacToe.viewSign [] winner, text " won!" ]
+                        [ Sign.view [] winner, text " won!" ]
 
                     Tie ->
                         [ el [] (text "Tie!") ]

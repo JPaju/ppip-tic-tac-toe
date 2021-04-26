@@ -1,13 +1,20 @@
-module Matrix exposing (Coordinate, Dimensions, Matrix, create, fromList, get, getRows, getRowsWithCoordinates, set, square)
+module TicTacToe.Matrix exposing
+    ( Dimensions
+    , Matrix
+    , create
+    , fromList
+    , get
+    , getRows
+    , getRowsWithCoordinates
+    , set
+    , square
+    )
 
 import Array exposing (Array)
 import Dict
 import Html.Attributes exposing (height, width)
+import TicTacToe.Coordinate exposing (Coordinate)
 import Util exposing (flip)
-
-
-type alias Coordinate =
-    ( Int, Int )
 
 
 type alias Dimensions =

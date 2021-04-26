@@ -5,9 +5,11 @@ import Element.Background as Background
 import Element.Font as Font
 import Json.Decode as Decode exposing (Decoder, field, string)
 import Json.Decode.Pipeline exposing (required)
-import Matrix exposing (Coordinate)
 import Ports
-import TicTacToe exposing (Board, Mark, Sign(..), boardDecoder, changeTurn, markDecoder, markEncoder, signDecoder, viewSign)
+import TicTacToe.Board as Board exposing (Board)
+import TicTacToe.Coordinate exposing (Coordinate)
+import TicTacToe.Mark as Mark exposing (Mark)
+import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
 import Util
 
@@ -62,11 +64,11 @@ update msg model =
                     if hasTurn == yourSign then
                         ( GameOn
                             { game
-                                | hasTurn = TicTacToe.changeTurn hasTurn
-                                , board = TicTacToe.placeMark (Mark yourSign coordinate) board
+                                | hasTurn = Sign.change hasTurn
+                                , board = Board.placeMark (Mark yourSign coordinate) board
                             }
                         , Mark yourSign coordinate
-                            |> markEncoder
+                            |> Mark.encoder
                             |> Ports.sendMark
                         )
 
@@ -81,8 +83,8 @@ update msg model =
                 GameOn ({ hasTurn, board } as game) ->
                     ( GameOn
                         { game
-                            | hasTurn = changeTurn hasTurn
-                            , board = TicTacToe.placeMark mark board
+                            | hasTurn = Sign.change hasTurn
+                            , board = Board.placeMark mark board
                         }
                     , Cmd.none
                     )
@@ -130,7 +132,7 @@ view model =
                             boardOverlay "Waiting for the opponent to make a move"
                 in
                 [ viewTurn yourTurn
-                , board |> TicTacToe.viewBoard [ inFront overlay ] CellClicked
+                , board |> Board.view [ inFront overlay ] CellClicked
                 , viewMarks yourSign
                 ]
 
@@ -148,7 +150,7 @@ view model =
                                 "It's a Draw! 🤷"
                 in
                 [ el (centerX :: alignTop :: Ui.pageHeaderStyle) (text "Game ended")
-                , board |> TicTacToe.viewBoard [ inFront (boardOverlay winnerText) ] CellClicked
+                , board |> Board.view [ inFront (boardOverlay winnerText) ] CellClicked
                 , Ui.button [ centerX ] { label = "New game", onClick = NewGameClicked, enabled = True }
                 ]
 
@@ -185,12 +187,12 @@ viewMarks yourSign =
         markRow label sign =
             row [ width fill ]
                 [ el [ width fill ] (text label)
-                , viewSign [ scale 0.5, alignRight ] sign
+                , Sign.view [ scale 0.5, alignRight ] sign
                 ]
     in
     column [ centerX ]
         [ markRow "You: " yourSign
-        , markRow "Opponent: " (changeTurn yourSign)
+        , markRow "Opponent: " (Sign.change yourSign)
         ]
 
 
@@ -244,9 +246,9 @@ gameStartedDecoder =
     let
         gameDecoder =
             Decode.succeed Game
-                |> required "board" boardDecoder
-                |> required "yourSign" signDecoder
-                |> required "nowHasTurn" signDecoder
+                |> required "board" Board.decoder
+                |> required "yourSign" Sign.decoder
+                |> required "nowHasTurn" Sign.decoder
     in
     Decode.map GameStarted gameDecoder
 
@@ -254,13 +256,13 @@ gameStartedDecoder =
 newMarkDecoder : Decoder Msg
 newMarkDecoder =
     Decode.succeed ReceivedMark
-        |> required "newMark" markDecoder
+        |> required "newMark" Mark.decoder
 
 
 gameEndedDecoder : Decoder Msg
 gameEndedDecoder =
     Decode.succeed GameEnded
-        |> required "board" boardDecoder
+        |> required "board" Board.decoder
         |> required "result" resultDecoder
 
 
