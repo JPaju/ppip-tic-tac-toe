@@ -44,7 +44,7 @@ changeRoute route model =
             ( { model | page = Home }, Cmd.none )
 
         Route.OfflineRoute ->
-            ( { model | page = Offline (OfflineGame.init 5) }, Cmd.none )
+            ( { model | page = Offline OfflineGame.init }, Cmd.none )
 
         Route.OnlineRoute ->
             let

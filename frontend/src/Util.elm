@@ -1,4 +1,4 @@
-module Util exposing (flip, foldResult, groupBy, hasValue)
+module Util exposing (average, flip, foldResult, groupBy, hasValue, indexOf)
 
 import Dict exposing (Dict)
 
@@ -10,6 +10,34 @@ import Dict exposing (Dict)
 flip : (a -> b -> c) -> (b -> a -> c)
 flip fn =
     \b a -> fn a b
+
+
+
+---- LIST ----
+
+
+indexOf : a -> List a -> Maybe Int
+indexOf value list =
+    let
+        loop : Int -> List a -> Maybe Int
+        loop index acc =
+            case acc of
+                head :: tail ->
+                    if head == value then
+                        Just index
+
+                    else
+                        loop (index + 1) tail
+
+                [] ->
+                    Nothing
+    in
+    loop 0 list
+
+
+average : List Int -> Float
+average list =
+    toFloat (List.sum list) / toFloat (List.length list)
 
 
 

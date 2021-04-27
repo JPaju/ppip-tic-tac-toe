@@ -1,4 +1,4 @@
-module TicTacToe.Sign exposing (Sign(..), change, decoder, encoder, isCircle, isCross, view)
+module TicTacToe.Sign exposing (Sign(..), change, decoder, encoder, isCircle, isCross, toString, view)
 
 import Element exposing (Attribute, Element, centerX, centerY, el, text)
 import Element.Font as Font
@@ -59,18 +59,20 @@ decoder =
             )
 
 
+toString : Sign -> String
+toString sign =
+    String.fromChar <|
+        case sign of
+            X ->
+                '❌'
+
+            O ->
+                '⭕'
+
+
 view : List (Attribute msg) -> Sign -> Element msg
 view attributes sign =
-    let
-        icon =
-            case sign of
-                X ->
-                    '❌'
-
-                O ->
-                    '⭕'
-    in
-    icon
-        |> String.fromChar
+    sign
+        |> toString
         |> text
         |> el (attributes ++ [ centerY, centerX, Font.size 36 ])

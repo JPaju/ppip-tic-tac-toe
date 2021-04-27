@@ -1,50 +1,66 @@
 module Page.OfflineGame exposing (Model, Msg, init, update, view)
 
-import Element exposing (Element, centerX, centerY, column, el, inFront, row, spacing, text)
+import Element exposing (Element, alignTop, centerX, centerY, column, el, fill, inFront, maximum, minimum, row, spacing, text, width)
 import TicTacToe.Board as Board exposing (Board)
 import TicTacToe.Coordinate exposing (Coordinate)
-import TicTacToe.Matrix as Matrix
+import TicTacToe.Matrix exposing (Dimensions)
 import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
+import Util exposing (average)
 
 
-
--- TODO: Let user choose the size of the board
+type alias BoardSettings =
+    { startingSign : Sign
+    , boardDimensions : Dimensions
+    }
 
 
 type Game
-    = Finished Board GameResult
-    | OnGoing
+    = Over Board GameResult
+    | Playing
         { board : Board
         , hasTurn : Sign
         }
 
 
 type GameResult
-    = Tie
+    = Draw
     | Won Sign
 
 
+type Model
+    = StartPage BoardSettings
+    | Game Game
+
+
 type Msg
-    = BoardClicked Coordinate
-    | ResetGame
+    = StartingSignChanged Sign
+    | BoardDimensionsChanged Dimensions
+    | StartGameClicked
+    | BoardClicked Coordinate
+    | ResetGameClicked
 
 
-type alias Model =
-    Game
+minBoardSize =
+    3
 
 
-initGame : Int -> Game
-initGame boardSize =
-    OnGoing
-        { board = Board.create (Matrix.Dimensions boardSize boardSize) []
-        , hasTurn = X
+maxBoardSize =
+    15
+
+
+init : Model
+init =
+    let
+        boardSize =
+            [ minBoardSize, maxBoardSize ]
+                |> average
+                |> round
+    in
+    StartPage
+        { startingSign = X
+        , boardDimensions = { height = boardSize, width = boardSize }
         }
-
-
-init : Int -> Model
-init boardSize =
-    initGame boardSize
 
 
 
@@ -52,43 +68,65 @@ init boardSize =
 
 
 update : Msg -> Model -> Model
-update msg game =
-    case msg of
-        BoardClicked coordinate ->
-            case game of
-                OnGoing { board, hasTurn } ->
-                    let
-                        newBoard =
-                            Board.placeMark { sign = hasTurn, location = coordinate } board
-                    in
-                    updateGame newBoard hasTurn
+update msg model =
+    case model of
+        StartPage settings ->
+            case msg of
+                StartingSignChanged sign ->
+                    StartPage { settings | startingSign = sign }
 
-                (Finished _ _) as finished ->
-                    finished
+                BoardDimensionsChanged dimensions ->
+                    StartPage { settings | boardDimensions = dimensions }
 
-        ResetGame ->
-            initGame 5
+                StartGameClicked ->
+                    Playing
+                        { board = Board.create settings.boardDimensions []
+                        , hasTurn = settings.startingSign
+                        }
+                        |> Game
+
+                _ ->
+                    StartPage settings
+
+        Game game ->
+            case msg of
+                ResetGameClicked ->
+                    init
+
+                BoardClicked coordinate ->
+                    Game (updateGame coordinate game)
+
+                _ ->
+                    model
 
 
-updateGame : Board -> Sign -> Game
-updateGame board hasTurn =
-    let
-        boardFull =
-            Board.isFull board
-    in
-    if boardFull then
-        Finished board Tie
+updateGame : Coordinate -> Game -> Game
+updateGame clickedCoordinate game =
+    case game of
+        Playing { board, hasTurn } ->
+            let
+                newBoard =
+                    Board.placeMark { sign = hasTurn, location = clickedCoordinate } board
 
-    else
-        case Board.checkWinner board of
-            Just winner ->
-                Finished board (Won winner)
+                boardFull =
+                    Board.isFull newBoard
+            in
+            if boardFull then
+                Over newBoard Draw
 
-            Nothing ->
-                OnGoing
-                    { hasTurn = Sign.change hasTurn
-                    , board = board
-                    }
+            else
+                case Board.checkWinner newBoard of
+                    Just winner ->
+                        Over newBoard (Won winner)
+
+                    Nothing ->
+                        Playing
+                            { hasTurn = Sign.change hasTurn
+                            , board = newBoard
+                            }
+
+        (Over _ _) as over ->
+            over
 
 
 
@@ -96,16 +134,55 @@ updateGame board hasTurn =
 
 
 view : Model -> Element Msg
-view game =
-    column [ centerX, centerY, spacing 50 ]
-        [ gameHeader game
-        , case game of
-            OnGoing { board } ->
-                Board.view [] BoardClicked board
+view model =
+    column [ centerX, centerY, spacing 70 ] <|
+        case model of
+            StartPage { boardDimensions, startingSign } ->
+                [ el (centerX :: alignTop :: Ui.pageHeaderStyle) (text "Game settings")
+                , boardDimensionSliders boardDimensions BoardDimensionsChanged
+                , selectStartSign startingSign
+                , Ui.button [ centerX ] { label = "Start game", enabled = True, onClick = StartGameClicked }
+                ]
 
-            Finished board result ->
-                Board.view [ inFront (gameEndedText result |> Board.overlay) ] BoardClicked board
-        , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGame }
+            Game game ->
+                [ gameHeader game
+                , case game of
+                    Playing { board } ->
+                        Board.view [] BoardClicked board
+
+                    Over board result ->
+                        Board.view [ inFront (gameEndedText result |> Board.overlay) ] BoardClicked board
+                , Ui.button [ centerX ] { label = "Reset", enabled = True, onClick = ResetGameClicked }
+                ]
+
+
+boardDimensionSliders : Dimensions -> (Dimensions -> msg) -> Element msg
+boardDimensionSliders dimensions toMsg =
+    let
+        createSlider label value onChange =
+            Ui.intSlider []
+                { onChange = onChange
+                , label = label ++ " " ++ String.fromInt value
+                , value = value
+                , min = minBoardSize
+                , max = maxBoardSize
+                , step = Just 1
+                }
+    in
+    column
+        [ width (fill |> minimum 200 |> maximum 300)
+        , spacing 30
+        ]
+        [ createSlider "Height" dimensions.height (\newValue -> { dimensions | height = newValue } |> toMsg)
+        , createSlider "Width" dimensions.width (\newValue -> { dimensions | width = newValue } |> toMsg)
+        ]
+
+
+selectStartSign : Sign -> Element Msg
+selectStartSign selectedSign =
+    column [ centerX, spacing 20 ]
+        [ el [] (text "Select starting sign ")
+        , el [ centerX ] (Ui.select [ X, O ] (Just selectedSign) Sign.toString StartingSignChanged)
         ]
 
 
@@ -113,16 +190,16 @@ gameHeader : Game -> Element msg
 gameHeader game =
     row (centerX :: Ui.pageHeaderStyle) <|
         case game of
-            OnGoing { hasTurn } ->
+            Playing { hasTurn } ->
                 [ el [] (text "Turn: "), Sign.view [] hasTurn ]
 
-            Finished _ result ->
+            Over _ result ->
                 case result of
                     Won winner ->
                         [ Sign.view [] winner, text " won!" ]
 
-                    Tie ->
-                        [ el [] (text "Tie!") ]
+                    Draw ->
+                        [ el [] (text "Draw!") ]
 
 
 gameEndedText : GameResult -> String
@@ -130,8 +207,8 @@ gameEndedText result =
     let
         resultText =
             case result of
-                Tie ->
-                    "It's a Tie"
+                Draw ->
+                    "It's a Draw!"
 
                 Won X ->
                     "Crosses won!"
