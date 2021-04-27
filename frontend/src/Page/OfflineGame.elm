@@ -1,17 +1,17 @@
 module Page.OfflineGame exposing (Model, Msg, init, update, view)
 
-import Element exposing (Element, alignTop, centerX, centerY, column, el, fill, inFront, maximum, minimum, row, spacing, text, width)
+import Element exposing (Attribute, Element, alignTop, centerX, centerY, column, el, fill, inFront, maximum, minimum, row, spacing, text, width)
+import Element.Font as Font
 import TicTacToe.Board as Board exposing (Board)
 import TicTacToe.Coordinate exposing (Coordinate)
 import TicTacToe.Matrix exposing (Dimensions)
 import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
-import Util exposing (average)
 
 
 type alias BoardSettings =
     { startingSign : Sign
-    , boardDimensions : Dimensions
+    , dimensions : Dimensions
     }
 
 
@@ -20,6 +20,7 @@ type Game
     | Playing
         { board : Board
         , hasTurn : Sign
+        , marksRequiredToWin : Int
         }
 
 
@@ -53,13 +54,11 @@ init : Model
 init =
     let
         boardSize =
-            [ minBoardSize, maxBoardSize ]
-                |> average
-                |> round
+            5
     in
     StartPage
         { startingSign = X
-        , boardDimensions = { height = boardSize, width = boardSize }
+        , dimensions = { height = boardSize, width = boardSize }
         }
 
 
@@ -76,12 +75,13 @@ update msg model =
                     StartPage { settings | startingSign = sign }
 
                 BoardDimensionsChanged dimensions ->
-                    StartPage { settings | boardDimensions = dimensions }
+                    StartPage { settings | dimensions = dimensions }
 
                 StartGameClicked ->
                     Playing
-                        { board = Board.create settings.boardDimensions []
+                        { board = Board.create settings.dimensions []
                         , hasTurn = settings.startingSign
+                        , marksRequiredToWin = Board.marksInRowRequiredToWin settings.dimensions
                         }
                         |> Game
 
@@ -103,7 +103,7 @@ update msg model =
 updateGame : Coordinate -> Game -> Game
 updateGame clickedCoordinate game =
     case game of
-        Playing { board, hasTurn } ->
+        Playing ({ board, hasTurn, marksRequiredToWin } as gameState) ->
             let
                 newBoard =
                     Board.placeMark { sign = hasTurn, location = clickedCoordinate } board
@@ -115,14 +115,15 @@ updateGame clickedCoordinate game =
                 Over newBoard Draw
 
             else
-                case Board.checkWinner newBoard of
+                case Board.checkWinner marksRequiredToWin newBoard of
                     Just winner ->
                         Over newBoard (Won winner)
 
                     Nothing ->
                         Playing
-                            { hasTurn = Sign.change hasTurn
-                            , board = newBoard
+                            { gameState
+                                | hasTurn = Sign.change hasTurn
+                                , board = newBoard
                             }
 
         (Over _ _) as over ->
@@ -137,9 +138,9 @@ view : Model -> Element Msg
 view model =
     column [ centerX, centerY, spacing 70 ] <|
         case model of
-            StartPage { boardDimensions, startingSign } ->
+            StartPage { dimensions, startingSign } ->
                 [ el (centerX :: alignTop :: Ui.pageHeaderStyle) (text "Game settings")
-                , boardDimensionSliders boardDimensions BoardDimensionsChanged
+                , boardDimensionSliders dimensions BoardDimensionsChanged
                 , selectStartSign startingSign
                 , Ui.button [ centerX ] { label = "Start game", enabled = True, onClick = StartGameClicked }
                 ]
@@ -147,8 +148,11 @@ view model =
             Game game ->
                 [ gameHeader game
                 , case game of
-                    Playing { board } ->
-                        Board.view [] BoardClicked board
+                    Playing { board, marksRequiredToWin } ->
+                        column [ spacing 15 ]
+                            [ Board.view [] BoardClicked board
+                            , marksRequiredToWinText [ Font.size 20, centerX ] marksRequiredToWin
+                            ]
 
                     Over board result ->
                         Board.view [ inFront (gameEndedText result |> Board.overlay) ] BoardClicked board
@@ -170,12 +174,16 @@ boardDimensionSliders dimensions toMsg =
                 }
     in
     column
-        [ width (fill |> minimum 200 |> maximum 300)
-        , spacing 30
-        ]
+        [ width (fill |> minimum 200 |> maximum 300), spacing 30 ]
         [ createSlider "Height" dimensions.height (\newValue -> { dimensions | height = newValue } |> toMsg)
         , createSlider "Width" dimensions.width (\newValue -> { dimensions | width = newValue } |> toMsg)
+        , marksRequiredToWinText [ centerX, Font.size 16 ] (Board.marksInRowRequiredToWin dimensions)
         ]
+
+
+marksRequiredToWinText : List (Attribute msg) -> Int -> Element msg
+marksRequiredToWinText attributes amount =
+    el attributes (text (String.fromInt amount ++ " marks in a row to win"))
 
 
 selectStartSign : Sign -> Element Msg

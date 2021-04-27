@@ -4,6 +4,7 @@ module TicTacToe.Board exposing
     , create
     , decoder
     , isFull
+    , marksInRowRequiredToWin
     , overlay
     , placeMark
     , view
@@ -18,7 +19,7 @@ import Json.Decode as Decode exposing (Decoder, int, list)
 import Json.Decode.Pipeline exposing (required)
 import TicTacToe.Coordinate exposing (Coordinate)
 import TicTacToe.Mark as Mark exposing (Mark)
-import TicTacToe.Matrix as Matrix exposing (Matrix)
+import TicTacToe.Matrix as Matrix exposing (Dimensions, Matrix)
 import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
 import Util
@@ -32,7 +33,7 @@ type Board
 ---- CREATE & MODIFY ----
 
 
-create : Matrix.Dimensions -> List Mark -> Board
+create : Dimensions -> List Mark -> Board
 create dimensions marks =
     marks
         |> List.map (\{ location, sign } -> ( location, sign ))
@@ -65,12 +66,9 @@ isFull board =
     markCount == Matrix.getCapacity matrix
 
 
-checkWinner : Board -> Maybe Sign
-checkWinner board =
+checkWinner : Int -> Board -> Maybe Sign
+checkWinner neededToWin board =
     let
-        neededToWin =
-            consiquentMarksNeededToWin board
-
         isWinner =
             \sign -> hasMarksInRow sign neededToWin board
     in
@@ -84,20 +82,20 @@ checkWinner board =
         Nothing
 
 
-consiquentMarksNeededToWin : Board -> Int
-consiquentMarksNeededToWin board =
+marksInRowRequiredToWin : Dimensions -> Int
+marksInRowRequiredToWin { height, width } =
     let
-        matrix =
-            getMatrix board
-
-        shorterDimension =
-            min (Matrix.getHeight matrix) (Matrix.getWidth matrix)
+        smallerDimension =
+            min height width
     in
-    if shorterDimension < 5 then
+    if smallerDimension == 3 then
         3
 
-    else
+    else if smallerDimension < 6 then
         4
+
+    else
+        5
 
 
 
@@ -136,7 +134,7 @@ decoder : Decoder Board
 decoder =
     let
         dimensionDecoder =
-            Decode.succeed Matrix.Dimensions
+            Decode.succeed Dimensions
                 |> required "height" int
                 |> required "width" int
     in
@@ -197,19 +195,19 @@ getMatrix (Board matrix) =
 hasMarksInRow : Sign -> Int -> Board -> Bool
 hasMarksInRow signToCheck count board =
     let
-        predicate =
+        isCorrectSign =
             \sign -> sign == signToCheck
 
         matrix =
             getMatrix board
 
         vertically =
-            Matrix.nConsecutiveVertically count (Maybe.map predicate >> Maybe.withDefault False)
+            Matrix.nConsecutiveVertically count (Maybe.map isCorrectSign >> Maybe.withDefault False)
 
         horizontally =
-            Matrix.nConsecutiveHorizontally count (Maybe.map predicate >> Maybe.withDefault False)
+            Matrix.nConsecutiveHorizontally count (Maybe.map isCorrectSign >> Maybe.withDefault False)
 
         diagonally =
-            Matrix.nConsecutiveDiagonally count (Maybe.map predicate >> Maybe.withDefault False)
+            Matrix.nConsecutiveDiagonally count (Maybe.map isCorrectSign >> Maybe.withDefault False)
     in
     vertically matrix || horizontally matrix || diagonally matrix
