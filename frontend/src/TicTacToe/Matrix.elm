@@ -5,21 +5,20 @@ module TicTacToe.Matrix exposing
     , filter
     , fromList
     , get
-    , getAllElements
     , getCapacity
     , getDimensions
+    , getElements
     , getHeight
     , getRowsWithCoordinates
     , getWidth
-    , nConsecutiveDiagonally
-    , nConsecutiveHorizontally
-    , nConsecutiveVertically
+    , hasNDiagonally
+    , hasNHorizontally
+    , hasNVertically
     , set
     , square
     )
 
 import Dict exposing (Dict)
-import Html.Attributes exposing (height, value, width)
 import TicTacToe.Coordinate as Coordinate exposing (Coordinate)
 import Util
 
@@ -90,19 +89,17 @@ isIncluded { width, height } ( x, y ) =
 
 
 get : Coordinate -> Matrix a -> Maybe a
-get coordinate (Matrix _ dict) =
-    Dict.get coordinate dict
+get coordinate matrix =
+    matrix
+        |> getDict
+        |> Dict.get coordinate
 
 
-getAllElements : Matrix a -> List a
-getAllElements (Matrix _ dict) =
-    Dict.values dict
-
-
-getAllCoordinates : Dimensions -> List Coordinate
-getAllCoordinates { height, width } =
-    List.range 0 ((height * width) - 1)
-        |> List.map (\i -> ( modBy width i, i // width ))
+getElements : Matrix a -> List a
+getElements matrix =
+    matrix
+        |> getDict
+        |> Dict.values
 
 
 getRowsWithCoordinates : Matrix a -> List (List ( Coordinate, Maybe a ))
@@ -115,11 +112,11 @@ getRowsWithCoordinates (Matrix dimensions dict) =
         |> List.map (List.map (\coordinate -> ( coordinate, Dict.get coordinate dict )))
 
 
-filter : (a -> Bool) -> Matrix a -> List ( Coordinate, a )
-filter pred (Matrix _ dict) =
+filter : (a -> Bool) -> Matrix a -> Matrix a
+filter pred (Matrix dimensions dict) =
     dict
-        |> Dict.toList
-        |> List.filter (Tuple.second >> pred)
+        |> Dict.filter (always pred)
+        |> Matrix dimensions
 
 
 
@@ -141,55 +138,71 @@ set coordinate value (Matrix dimensions dict) =
 ---- CALCULATE ----
 
 
-nConsecutiveHorizontally : Int -> (a -> Bool) -> Matrix a -> Bool
-nConsecutiveHorizontally n isValidElement matrix =
-    matrix
-        |> filter isValidElement
-        |> List.map Tuple.first
-        |> Util.groupBy Coordinate.getY
-        |> Dict.map (always (List.map Coordinate.getX >> List.sort))
-        |> Dict.values
-        |> List.any (hasNConsecutiveNumbers n)
+hasNHorizontally : Int -> Matrix a -> Bool
+hasNHorizontally count =
+    hasNInRow count (\( x, y ) -> ( x, y + 1 ))
 
 
-nConsecutiveVertically : Int -> (a -> Bool) -> Matrix a -> Bool
-nConsecutiveVertically n isValidElement matrix =
-    matrix
-        |> filter isValidElement
-        |> List.map Tuple.first
-        |> Util.groupBy Coordinate.getX
-        |> Dict.map (always (List.map Coordinate.getY >> List.sort))
-        |> Dict.values
-        |> List.any (hasNConsecutiveNumbers n)
+hasNVertically : Int -> Matrix a -> Bool
+hasNVertically count =
+    hasNInRow count (\( x, y ) -> ( x + 1, y ))
 
 
-{-| --TODO Implement
--}
-nConsecutiveDiagonally : Int -> (a -> Bool) -> Matrix a -> Bool
-nConsecutiveDiagonally _ _ _ =
-    False
+hasNDiagonally : Int -> Matrix a -> Bool
+hasNDiagonally count matrix =
+    hasNInRow count (\( x, y ) -> ( x + 1, y + 1 )) matrix
+        || hasNInRow count (\( x, y ) -> ( x + 1, y - 1 )) matrix
 
 
 
 ---- PRIVATE HELPERS ----
 
 
-hasNConsecutiveNumbers : Int -> List Int -> Bool
-hasNConsecutiveNumbers n list =
+getPopulatedCoordinates : Matrix a -> List Coordinate
+getPopulatedCoordinates matrix =
+    matrix
+        |> getDict
+        |> Dict.keys
+
+
+getAllCoordinates : Dimensions -> List Coordinate
+getAllCoordinates { height, width } =
+    List.range 0 ((height * width) - 1)
+        |> List.map (\i -> ( modBy width i, i // width ))
+
+
+hasNInRow : Int -> (Coordinate -> Coordinate) -> Matrix a -> Bool
+hasNInRow n toNextCoordinate matrix =
     let
-        ( _, highestCount ) =
-            list
-                |> List.foldl
-                    (\currX ( prevX, count ) ->
-                        if count >= n then
-                            ( 0, count )
+        hasInRowHelper : Int -> Coordinate -> Bool
+        hasInRowHelper count coordinate =
+            count
+                == n
+                || (let
+                        nextCoordinate =
+                            toNextCoordinate coordinate
 
-                        else if prevX + 1 == currX then
-                            ( currX, count + 1 )
+                        nextHasValue =
+                            matrix
+                                |> getDict
+                                |> Dict.member nextCoordinate
+                    in
+                    nextHasValue && hasInRowHelper (count + 1) nextCoordinate
+                   )
 
-                        else
-                            ( currX, 1 )
-                    )
-                    ( 0, 0 )
+        loop : List Coordinate -> Bool
+        loop coordinatesToCheck =
+            case coordinatesToCheck of
+                currentCoordinate :: restCoordinates ->
+                    hasInRowHelper 1 currentCoordinate || loop restCoordinates
+
+                [] ->
+                    False
     in
-    highestCount >= n
+    getPopulatedCoordinates matrix
+        |> loop
+
+
+getDict : Matrix a -> Dict Coordinate a
+getDict (Matrix _ dict) =
+    dict

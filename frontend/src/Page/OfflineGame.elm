@@ -114,17 +114,15 @@ updateGame clickedCoordinate game =
             if boardFull then
                 Over newBoard Draw
 
-            else
-                case Board.checkWinner marksRequiredToWin newBoard of
-                    Just winner ->
-                        Over newBoard (Won winner)
+            else if Board.hasWon marksRequiredToWin newBoard hasTurn then
+                Over newBoard (Won hasTurn)
 
-                    Nothing ->
-                        Playing
-                            { gameState
-                                | hasTurn = Sign.change hasTurn
-                                , board = newBoard
-                            }
+            else
+                Playing
+                    { gameState
+                        | hasTurn = Sign.change hasTurn
+                        , board = newBoard
+                    }
 
         (Over _ _) as over ->
             over

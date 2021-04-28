@@ -1,8 +1,8 @@
 module TicTacToe.Board exposing
     ( Board
-    , checkWinner
     , create
     , decoder
+    , hasWon
     , isFull
     , marksInRowRequiredToWin
     , overlay
@@ -58,26 +58,10 @@ isFull board =
 
         markCount =
             matrix
-                |> Matrix.getAllElements
+                |> Matrix.getElements
                 |> List.length
     in
     markCount == Matrix.getCapacity matrix
-
-
-checkWinner : Int -> Board -> Maybe Sign
-checkWinner neededToWin board =
-    let
-        isWinner =
-            \sign -> hasMarksInRow sign neededToWin board
-    in
-    if isWinner X then
-        Just X
-
-    else if isWinner O then
-        Just O
-
-    else
-        Nothing
 
 
 marksInRowRequiredToWin : Dimensions -> Int
@@ -94,6 +78,19 @@ marksInRowRequiredToWin { height, width } =
 
     else
         5
+
+
+hasWon : Int -> Board -> Sign -> Bool
+hasWon marksRequiredToWin board sign =
+    let
+        signs =
+            board
+                |> getMatrix
+                |> Matrix.filter ((==) sign)
+    in
+    Matrix.hasNVertically marksRequiredToWin signs
+        || Matrix.hasNHorizontally marksRequiredToWin signs
+        || Matrix.hasNDiagonally marksRequiredToWin signs
 
 
 
@@ -188,24 +185,3 @@ markedCell attributes sign =
 getMatrix : Board -> Matrix Sign
 getMatrix (Board matrix) =
     matrix
-
-
-hasMarksInRow : Sign -> Int -> Board -> Bool
-hasMarksInRow signToCheck count board =
-    let
-        isCorrectSign =
-            \sign -> sign == signToCheck
-
-        matrix =
-            getMatrix board
-
-        vertically =
-            Matrix.nConsecutiveVertically count isCorrectSign
-
-        horizontally =
-            Matrix.nConsecutiveHorizontally count isCorrectSign
-
-        diagonally =
-            Matrix.nConsecutiveDiagonally count isCorrectSign
-    in
-    vertically matrix || horizontally matrix || diagonally matrix
