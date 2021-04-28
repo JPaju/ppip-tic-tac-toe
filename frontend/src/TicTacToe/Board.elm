@@ -22,11 +22,10 @@ import TicTacToe.Mark as Mark exposing (Mark)
 import TicTacToe.Matrix as Matrix exposing (Dimensions, Matrix)
 import TicTacToe.Sign as Sign exposing (Sign(..))
 import Ui
-import Util
 
 
 type Board
-    = Board (Matrix (Maybe Sign))
+    = Board (Matrix Sign)
 
 
 
@@ -43,7 +42,7 @@ create dimensions marks =
 
 placeMark : Mark -> Board -> Board
 placeMark { sign, location } (Board board) =
-    Matrix.set location (Just sign) board
+    Matrix.set location sign board
         |> Board
 
 
@@ -60,7 +59,6 @@ isFull board =
         markCount =
             matrix
                 |> Matrix.getAllElements
-                |> List.filter Util.hasValue
                 |> List.length
     in
     markCount == Matrix.getCapacity matrix
@@ -103,9 +101,9 @@ marksInRowRequiredToWin { height, width } =
 
 
 view : List (Attribute msg) -> (Coordinate -> msg) -> Board -> Element msg
-view attributes toMsg (Board board) =
+view attributes toMsg (Board matrix) =
     column attributes
-        (board
+        (matrix
             |> Matrix.getRowsWithCoordinates
             |> List.map viewRow
             |> List.map (Element.map toMsg)
@@ -147,15 +145,15 @@ decoder =
 ---- PRIVATE FUNCTIONS ----
 
 
-viewRow : List ( Maybe Sign, Coordinate ) -> Element Coordinate
+viewRow : List ( Coordinate, Maybe Sign ) -> Element Coordinate
 viewRow columns =
     columns
         |> List.map boardCell
         |> row []
 
 
-boardCell : ( Maybe Sign, Coordinate ) -> Element Coordinate
-boardCell ( maybeSign, coord ) =
+boardCell : ( Coordinate, Maybe Sign ) -> Element Coordinate
+boardCell ( coord, maybeSign ) =
     let
         size =
             px 100
@@ -187,7 +185,7 @@ markedCell attributes sign =
         }
 
 
-getMatrix : Board -> Matrix (Maybe Sign)
+getMatrix : Board -> Matrix Sign
 getMatrix (Board matrix) =
     matrix
 
@@ -202,12 +200,12 @@ hasMarksInRow signToCheck count board =
             getMatrix board
 
         vertically =
-            Matrix.nConsecutiveVertically count (Maybe.map isCorrectSign >> Maybe.withDefault False)
+            Matrix.nConsecutiveVertically count isCorrectSign
 
         horizontally =
-            Matrix.nConsecutiveHorizontally count (Maybe.map isCorrectSign >> Maybe.withDefault False)
+            Matrix.nConsecutiveHorizontally count isCorrectSign
 
         diagonally =
-            Matrix.nConsecutiveDiagonally count (Maybe.map isCorrectSign >> Maybe.withDefault False)
+            Matrix.nConsecutiveDiagonally count isCorrectSign
     in
     vertically matrix || horizontally matrix || diagonally matrix

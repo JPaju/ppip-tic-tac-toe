@@ -9,7 +9,6 @@ module TicTacToe.Matrix exposing
     , getCapacity
     , getDimensions
     , getHeight
-    , getRows
     , getRowsWithCoordinates
     , getWidth
     , nConsecutiveDiagonally
@@ -19,10 +18,10 @@ module TicTacToe.Matrix exposing
     , square
     )
 
-import Array exposing (Array)
-import Dict
+import Dict exposing (Dict)
+import Html.Attributes exposing (height, value, width)
 import TicTacToe.Coordinate as Coordinate exposing (Coordinate)
-import Util exposing (flip)
+import Util
 
 
 type alias Dimensions =
@@ -31,34 +30,30 @@ type alias Dimensions =
     }
 
 
-{-| --TODO Implement with Dict so that not every cell has to be initialized
--}
 type Matrix a
-    = Matrix Dimensions (Array (Array a))
+    = Matrix Dimensions (Dict Coordinate a)
 
 
 
 ---- CREATE ----
 
 
-create : Dimensions -> (Coordinate -> a) -> Matrix a
-create ({ height, width } as dimensions) toElement =
-    Array.initialize height (createRow width toElement)
-        |> Matrix dimensions
+create : Dimensions -> Matrix a
+create dimensions =
+    Matrix dimensions Dict.empty
 
 
-square : Int -> (Coordinate -> a) -> Matrix a
+square : Int -> Matrix a
 square size =
     create { height = size, width = size }
 
 
-fromList : Dimensions -> List ( Coordinate, a ) -> Matrix (Maybe a)
+fromList : Dimensions -> List ( Coordinate, a ) -> Matrix a
 fromList dimensions values =
-    let
-        byCoordinates =
-            Dict.fromList values
-    in
-    create dimensions (flip Dict.get byCoordinates)
+    values
+        |> List.filter (Tuple.first >> isIncluded dimensions)
+        |> Dict.fromList
+        |> Matrix dimensions
 
 
 
@@ -85,11 +80,9 @@ getCapacity matrix =
     getHeight matrix * getWidth matrix
 
 
-getRows : Matrix a -> List (List a)
-getRows (Matrix _ matrix) =
-    matrix
-        |> Array.toList
-        |> List.map Array.toList
+isIncluded : Dimensions -> Coordinate -> Bool
+isIncluded { width, height } ( x, y ) =
+    (x < width) && (y < height)
 
 
 
@@ -97,29 +90,36 @@ getRows (Matrix _ matrix) =
 
 
 get : Coordinate -> Matrix a -> Maybe a
-get ( x, y ) (Matrix _ matrix) =
-    matrix
-        |> Array.get y
-        |> Maybe.andThen (Array.get x)
+get coordinate (Matrix _ dict) =
+    Dict.get coordinate dict
 
 
 getAllElements : Matrix a -> List a
-getAllElements =
-    getRows >> List.concat
+getAllElements (Matrix _ dict) =
+    Dict.values dict
 
 
-getRowsWithCoordinates : Matrix a -> List (List ( a, Coordinate ))
-getRowsWithCoordinates (Matrix _ matrix) =
-    matrix
-        |> Array.toList
-        |> List.indexedMap (\y row -> row |> Array.indexedMap (\x a -> ( a, ( x, y ) )) |> Array.toList)
+getAllCoordinates : Dimensions -> List Coordinate
+getAllCoordinates { height, width } =
+    List.range 0 ((height * width) - 1)
+        |> List.map (\i -> ( modBy width i, i // width ))
 
 
-filter : (a -> Bool) -> Matrix a -> List ( a, Coordinate )
-filter pred matrix =
-    getRowsWithCoordinates matrix
-        |> List.concat
-        |> List.filter (Tuple.first >> pred)
+getRowsWithCoordinates : Matrix a -> List (List ( Coordinate, Maybe a ))
+getRowsWithCoordinates (Matrix dimensions dict) =
+    dimensions
+        |> getAllCoordinates
+        |> Util.groupBy Coordinate.getY
+        |> Dict.values
+        |> List.map (List.sortBy Coordinate.getX)
+        |> List.map (List.map (\coordinate -> ( coordinate, Dict.get coordinate dict )))
+
+
+filter : (a -> Bool) -> Matrix a -> List ( Coordinate, a )
+filter pred (Matrix _ dict) =
+    dict
+        |> Dict.toList
+        |> List.filter (Tuple.second >> pred)
 
 
 
@@ -127,26 +127,14 @@ filter pred matrix =
 
 
 set : Coordinate -> a -> Matrix a -> Matrix a
-set ( coordX, coordY ) value (Matrix dimensions matrix) =
-    -- Fucking disgusting
-    matrix
-        |> Array.indexedMap
-            (\y row ->
-                if y == coordY then
-                    row
-                        |> Array.indexedMap
-                            (\x a ->
-                                if x == coordX then
-                                    value
+set coordinate value (Matrix dimensions dict) =
+    if isIncluded dimensions coordinate then
+        dict
+            |> Dict.insert coordinate value
+            |> Matrix dimensions
 
-                                else
-                                    a
-                            )
-
-                else
-                    row
-            )
-        |> Matrix dimensions
+    else
+        Matrix dimensions dict
 
 
 
@@ -157,7 +145,7 @@ nConsecutiveHorizontally : Int -> (a -> Bool) -> Matrix a -> Bool
 nConsecutiveHorizontally n isValidElement matrix =
     matrix
         |> filter isValidElement
-        |> List.map Tuple.second
+        |> List.map Tuple.first
         |> Util.groupBy Coordinate.getY
         |> Dict.map (always (List.map Coordinate.getX >> List.sort))
         |> Dict.values
@@ -168,7 +156,7 @@ nConsecutiveVertically : Int -> (a -> Bool) -> Matrix a -> Bool
 nConsecutiveVertically n isValidElement matrix =
     matrix
         |> filter isValidElement
-        |> List.map Tuple.second
+        |> List.map Tuple.first
         |> Util.groupBy Coordinate.getX
         |> Dict.map (always (List.map Coordinate.getY >> List.sort))
         |> Dict.values
@@ -178,17 +166,12 @@ nConsecutiveVertically n isValidElement matrix =
 {-| --TODO Implement
 -}
 nConsecutiveDiagonally : Int -> (a -> Bool) -> Matrix a -> Bool
-nConsecutiveDiagonally n pred matrix =
+nConsecutiveDiagonally _ _ _ =
     False
 
 
 
 ---- PRIVATE HELPERS ----
-
-
-createRow : Int -> (Coordinate -> a) -> Int -> Array a
-createRow width toElement y =
-    Array.initialize width (\x -> toElement ( x, y ))
 
 
 hasNConsecutiveNumbers : Int -> List Int -> Bool
