@@ -107,4 +107,4 @@ components:
       enum:
         - Won
         - Lost
-        - Tie
+        - Draw
