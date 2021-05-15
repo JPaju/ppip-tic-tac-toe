@@ -41,11 +41,21 @@ module Message =
     type GameEnded = { board: Game.Board; result: Result }
 
 
-    type Message =
+    type MessageContent =
         | SearchingOpponent
         | GameOn of GameOn
         | MarkPlaced of MarkPlaced
         | GameEnded of GameEnded
+
+    type MessageType =
+        | SearchingOpponent
+        | GameOn
+        | MarkPlaced
+        | GameEnded
+
+    type Message =
+        { msgType: MessageType
+          msg: MessageContent }
 
     module Decoder =
         type Test = int
@@ -60,7 +70,5 @@ module Json =
 
     let deserialize<'a> (str: string) : Result<'a, exn> =
         try
-            JsonSerializer.Deserialize<'a> str |> Result.Ok
-        with
-            // catch all exceptions and convert to Result
-            ex -> Result.Error ex
+            JsonSerializer.Deserialize<'a> str |> Ok
+        with ex -> Error ex

@@ -9,36 +9,64 @@ open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Text
+open TicTacToe.Game
+open TicTacToe.Message
 
 let ws (webSocket: WebSocket) (context: HttpContext) =
     socket {
-        // if `loop` is set to false, the server will stop receiving messages
         let mutable loop = true
 
         while loop do
-            // the server will wait for a message to be received without blocking the thread
+            //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
             let! msg = webSocket.read ()
 
             match msg with
-            // the message has type (Opcode * byte [] * bool)
-            //
-            // Opcode type:
-            //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
-            //
-            // byte [] contains the actual message
-            //
-            // the last element is the FIN byte, explained later
             | (Text, data, true) ->
                 // the message can be converted to a string
-                let str = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
+                let msgFromClient = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
 
-                let response =
-                    sprintf "MARNEE MADE THIS response to %s" str
+                let deserializedFromClient =
+                    TicTacToe.Json.deserialize<Dimensions> (msgFromClient)
 
+
+                match deserializedFromClient with
+                | Ok req -> System.Console.WriteLine req
+                | _ -> ()
+
+
+
+                (* let testi2Serialization test (msg: Result<Dimensions, exn>): Dimensions =
+                    match msg with
+                        | Ok req -> req
+                        | _ -> "seg" *)
+
+
+                //let response: string = TicTacToe.Json.serialize testi;
+
+
+                let dimensions : Dimensions = { height = 420; width = 69 }
+                //let markplaced : MarkPlaced = { height = 420; width = 69 }
+                let marks : Mark list =
+                    [ { sign = X
+                        coordinate = { x = 3; y = 5 } };
+                      { sign = O
+                        coordinate = { x = 1; y = 2 } };
+                ]
+
+
+                let board : Board =
+                    { dimensions = dimensions
+                      marks = marks }
+                let markplaced: MarkPlaced = { newMark= marks.Head; board= board }
+
+                let message :Message = { msgType= MarkPlaced; msg= markplaced }
+
+                let response : string = TicTacToe.Json.serialize markplaced
+                System.Console.WriteLine response
                 // the response needs to be converted to a ByteSegment
                 let byteResponse =
                     response
-                    |> System.Text.Encoding.ASCII.GetBytes
+                    |> System.Text.Encoding.UTF8.GetBytes
                     |> ByteSegment
 
                 // the `send` function sends a message back to the client
@@ -97,17 +125,3 @@ let main _ =
         app
 
     0
-
-//
-// The FIN byte:
-//
-// A single message can be sent separated by fragments. The FIN byte indicates the final fragment. Fragments
-//
-// As an example, this is valid code, and will send only one message to the client:
-//
-// do! webSocket.send Text firstPart false
-// do! webSocket.send Continuation secondPart false
-// do! webSocket.send Continuation thirdPart true
-//
-// More information on the WebSocket protocol can be found at: https://tools.ietf.org/html/rfc6455#page-34
-//
