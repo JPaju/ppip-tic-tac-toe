@@ -1,2 +1,4 @@
 source https://www.nuget.org/api/v2
+nuget FSharp.Control.Reactive 5.0.2
 nuget suave
+nuget System.Reactive

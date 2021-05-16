@@ -10,9 +10,21 @@ open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Text
 open TicTacToe.Game
-open TicTacToe.Message
+open TicTacToe
+open Json
 
-let ws (webSocket: WebSocket) (context: HttpContext) =
+type WSGame =
+    { mutable player1: WebSocket option
+      mutable player2: WebSocket option
+      mutable game: GameState }
+
+let emptyGame =
+    { player1 = None
+      player2 = None
+      game = NoPlayers }
+
+let ws (game: WSGame) (webSocket: WebSocket) (context: HttpContext) =
+
     socket {
         let mutable loop = true
 
@@ -25,13 +37,13 @@ let ws (webSocket: WebSocket) (context: HttpContext) =
                 // the message can be converted to a string
                 let msgFromClient = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
 
-                let deserializedFromClient =
-                    TicTacToe.Json.deserialize<Dimensions> (msgFromClient)
+                // let deserializedFromClient =
+                //     deserialize<Dimensions> (msgFromClient)
 
 
-                match deserializedFromClient with
-                | Ok req -> System.Console.WriteLine req
-                | _ -> ()
+                // match deserializedFromClient with
+                // | Ok req -> System.Console.WriteLine req
+                // | _ -> ()
 
 
 
@@ -44,24 +56,28 @@ let ws (webSocket: WebSocket) (context: HttpContext) =
                 //let response: string = TicTacToe.Json.serialize testi;
 
 
-                let dimensions : Dimensions = { height = 420; width = 69 }
+                // let dimensions : Dimensions = { height = 420; width = 69 }
                 //let markplaced : MarkPlaced = { height = 420; width = 69 }
-                let marks : Mark list =
-                    [ { sign = X
-                        coordinate = { x = 3; y = 5 } };
-                      { sign = O
-                        coordinate = { x = 1; y = 2 } };
-                ]
+                // let marks : Mark list =
+                //     [ { sign = X
+                //         coordinate = { x = 3; y = 5 } }
+                //       { sign = O
+                //         coordinate = { x = 1; y = 2 } } ]
 
 
-                let board : Board =
-                    { dimensions = dimensions
-                      marks = marks }
-                let markplaced: MarkPlaced = { newMark= marks.Head; board= board }
+                // let board : Board =
+                //     { dimensions = dimensions
+                //       marks = marks }
 
-                let message :Message = { msgType= MarkPlaced; msg= markplaced }
+                // let markplaced : MarkPlaced = { newMark = marks.Head; board = board }
 
-                let response : string = TicTacToe.Json.serialize markplaced
+                // let message : Message =
+                //     { msgType = NewMark
+                //       msg = MarkPlaced(markplaced) }
+
+                // let response : string = TicTacToe.Json.serialize markplaced
+                let response : string = "lol"
+
                 System.Console.WriteLine response
                 // the response needs to be converted to a ByteSegment
                 let byteResponse =
@@ -90,7 +106,7 @@ let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Ch
             member __.Dispose() =
                 printfn "Resource needed by websocket connection disposed" }
 
-    let websocketWorkflow = ws webSocket context
+    let websocketWorkflow = ws emptyGame webSocket context
 
     async {
         let! successOrError = websocketWorkflow
@@ -108,7 +124,7 @@ let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Ch
     }
 
 let app : WebPart =
-    choose [ path "/websocket" >=> handShake ws
+    choose [ path "/websocket" >=> handShake (ws emptyGame)
              // path "/websocketWithSubprotocol" >=> handShakeWithSubprotocol (chooseSubprotocol "test") ws
              path "/websocketWithError"
              >=> handShake wsWithErrorHandling

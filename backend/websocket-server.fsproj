@@ -5,9 +5,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="TicTacToe.fs" />
+    <Compile Include="Json.fs" />
     <Compile Include="Program.fs" />
+    <Compile Include="WebsocketGame.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="suave" Version="2.2.1" />
+    <PackageReference Include="FSharp.Control.Reactive" Version="5.0.2" />
   </ItemGroup>
 </Project>

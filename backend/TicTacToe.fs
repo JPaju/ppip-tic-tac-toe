@@ -1,19 +1,26 @@
 namespace TicTacToe
 
-open System.Text.Json
+module Bilu =
+    let todo<'T> : 'T = raise (System.NotImplementedException())
 
 module Game =
+
     type Sign =
         | X
         | O
+
+    let changeSign sign =
+        match sign with
+        | X -> O
+        | O -> X
 
     type Result =
         | Winner of Sign
         | Draw
 
-    type Coordinate = { x: int; y: int }
+    type Coordinate = int * int
 
-    type Mark = { sign: Sign; coordinate: Coordinate }
+    type Mark = Sign * Coordinate
 
     type Dimensions = { height: int; width: int }
 
@@ -21,54 +28,72 @@ module Game =
         { dimensions: Dimensions
           marks: Mark list }
 
+    let defaultDimensions = { height = 5; width = 5 }
 
-module Message =
+    let emptyBoard =
+        { dimensions = defaultDimensions
+          marks = [] }
 
-    type GameOn =
-        { board: Game.Board
-          nowHasTurn: Game.Sign
-          yourSign: Game.Sign }
+    type GameState =
+        | NoPlayers
+        | OnePlayer of Sign
+        | GameOn of Board * Sign
+        | GameEnded of Board * Result
 
-    type MarkPlaced =
-        { newMark: Game.Mark
-          board: Game.Board }
+    type InMessage =
+        | PlayerConnected
+        | PlayerDisconnected
+        | MarkReceived of Mark
 
-    type Result =
-        | Won
-        | Lost
-        | Draw
+module Blah =
+    open Game
 
-    type GameEnded = { board: Game.Board; result: Result }
+    let private isInBoard (_, (x, y)) board =
+        let dimensions = board.dimensions
+        dimensions.height > y && dimensions.width > x
 
+    let private isOccupied (board: Board) (coordinate: Coordinate) =
+        let coordinates = List.map snd board.marks
+        List.exists ((=) coordinate) coordinates
 
-    type MessageContent =
-        | SearchingOpponent
-        | GameOn of GameOn
-        | MarkPlaced of MarkPlaced
-        | GameEnded of GameEnded
+    let private placeMark (mark: Mark) (board: Board) : Board =
+        let marks = board.marks
+        let coordinate = snd mark
 
-    type MessageType =
-        | SearchingOpponent
-        | GameOn
-        | MarkPlaced
-        | GameEnded
+        if
+            isInBoard mark board
+            && not (isOccupied board coordinate)
+        then
+            { board with marks = mark :: marks }
+        else
+            board
 
-    type Message =
-        { msgType: MessageType
-          msg: MessageContent }
+    let private hasPlayerWon (player: Sign) (board: Board) =
+        (new System.Random()).NextDouble() < 0.1
 
-    module Decoder =
-        type Test = int
+    let private getCapacity board =
+        board.dimensions.height * board.dimensions.width
 
-module Json =
-    let serialize obj = JsonSerializer.Serialize obj
+    let private isFull (board: Board) : bool =
+        (getCapacity board) = board.marks.Length
 
+    // let test =
+    //     placeMark
+    //         (X, (-34, 999999999))
+    //         { marks = []
+    //           dimensions = defaultDimensions }
 
-    type Test =
-        | JsonException
-        | ArgumentNullException
+    let updateGame (message: InMessage) (game: GameState) : GameState =
+        match (message, game) with
+        | (PlayerConnected, NoPlayers) -> OnePlayer X
+        | (PlayerConnected, OnePlayer sign) -> GameOn(emptyBoard, changeSign sign)
+        | (MarkReceived mark, GameOn (board, sign)) ->
+            let newBoard = placeMark mark board
 
-    let deserialize<'a> (str: string) : Result<'a, exn> =
-        try
-            JsonSerializer.Deserialize<'a> str |> Ok
-        with ex -> Error ex
+            if hasPlayerWon sign newBoard then
+                GameEnded(newBoard, (Winner sign))
+            elif isFull newBoard then
+                GameEnded(newBoard, Draw)
+            else
+                GameOn(newBoard, changeSign sign)
+        | (_, _) -> game
