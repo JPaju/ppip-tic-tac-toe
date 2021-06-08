@@ -1,7 +1,7 @@
 module Json
 
 open System.Text.Json
-open TicTacToe
+open TicTacToe.Core.Domain
 
 let serialize obj = JsonSerializer.Serialize obj
 
@@ -16,20 +16,18 @@ let deserialize<'a> (str: string) : Result<'a, exn> =
 
 
 type GameOn =
-    { board: Game.Board
-      nowHasTurn: Game.Sign
-      yourSign: Game.Sign }
+    { board: Board
+      nowHasTurn: Sign
+      yourSign: Sign }
 
-type MarkPlaced =
-    { newMark: Game.Mark
-      board: Game.Board }
+type MarkPlaced = { newMark: Mark; board: Board }
 
 type Result =
     | Won
     | Lost
     | Draw
 
-type GameEnded = { board: Game.Board; result: Result }
+type GameEnded = { board: Board; result: Result }
 
 type Message =
     | SearchingOpponent

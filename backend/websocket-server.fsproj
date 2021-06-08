@@ -4,10 +4,10 @@
     <TargetFramework>netcoreapp5.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="TicTacToe.fs" />
+    <Compile Include="TicTacToe/Core.fs" />
     <Compile Include="Json.fs" />
-    <Compile Include="Program.fs" />
     <Compile Include="WebsocketGame.fs" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="suave" Version="2.2.1" />

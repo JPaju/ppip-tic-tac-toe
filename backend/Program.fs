@@ -9,96 +9,101 @@ open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Text
-open TicTacToe.Game
-open TicTacToe
-open Json
+open TicTacToe.Core.Domain
+open TicTacToe.Core
+open FSharp.Control.Reactive
 
-type WSGame =
-    { mutable player1: WebSocket option
-      mutable player2: WebSocket option
-      mutable game: GameState }
 
-let emptyGame =
-    { player1 = None
-      player2 = None
-      game = NoPlayers }
+type PlayerId = string
+type Command = Mark * PlayerId
 
-let ws (game: WSGame) (webSocket: WebSocket) (context: HttpContext) =
+let receivedCommands = Subject<Command>.broadcast
+
+receivedCommands
+|> Observable.subscribe (fun newCommand -> Console.WriteLine($"New command from websocket: {newCommand}"))
+|> ignore
+
+
+module Decode =
+
+    let private parseInt string =
+        try
+            let i = System.Int32.Parse string
+            Some(i)
+        with _ -> None
+
+    let coordinate x y : Coordinate option =
+        Option.map2 (fun x y -> (x, y)) (parseInt x) (parseInt y)
+
+    let sign (sign: string) : Sign option =
+        match sign.ToUpper() with
+        | "O" -> Some O
+        | "X" -> Some X
+        | _ -> None
+
+    let command (string: string) : Command option =
+        match string.Split([| ',' |]) with
+        | [| x; y; signString; name |] ->
+            ((coordinate x y), (sign signString))
+            ||> Option.map2 (fun coord sign -> (sign, coord))
+            |> Option.map (fun mark -> (mark, name))
+
+        | _ -> None
+
+
+let accumulator (oldState: GameState) (mark: Mark) : GameState =
+    let newState = Game.update mark oldState
+
+    System.Console.WriteLine($"Old state: {oldState}")
+    System.Console.WriteLine($"New state: {newState}")
+
+    newState
+
+let gameState =
+    receivedCommands
+    |> Observable.iter (fun cmd -> System.Console.WriteLine($"Received new command: {cmd}"))
+    |> Observable.map (fun (mark, _) -> mark)
+    |> Observable.scanInit (Game.init O) accumulator
+
+
+gameState
+|> Observable.subscribe (fun _ -> printfn "\n\n")
+|> ignore
+
+
+let ws (webSocket: WebSocket) (_: HttpContext) =
 
     socket {
         let mutable loop = true
 
         while loop do
-            //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
             let! msg = webSocket.read ()
 
             match msg with
             | (Text, data, true) ->
-                // the message can be converted to a string
+
                 let msgFromClient = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
 
-                // let deserializedFromClient =
-                //     deserialize<Dimensions> (msgFromClient)
+                System.Console.WriteLine($"Received websocket message: {msgFromClient}")
 
+                Decode.command msgFromClient
+                |> Option.iter (fun cmd -> (receivedCommands |> Subject.onNext cmd |> ignore))
 
-                // match deserializedFromClient with
-                // | Ok req -> System.Console.WriteLine req
-                // | _ -> ()
-
-
-
-                (* let testi2Serialization test (msg: Result<Dimensions, exn>): Dimensions =
-                    match msg with
-                        | Ok req -> req
-                        | _ -> "seg" *)
-
-
-                //let response: string = TicTacToe.Json.serialize testi;
-
-
-                // let dimensions : Dimensions = { height = 420; width = 69 }
-                //let markplaced : MarkPlaced = { height = 420; width = 69 }
-                // let marks : Mark list =
-                //     [ { sign = X
-                //         coordinate = { x = 3; y = 5 } }
-                //       { sign = O
-                //         coordinate = { x = 1; y = 2 } } ]
-
-
-                // let board : Board =
-                //     { dimensions = dimensions
-                //       marks = marks }
-
-                // let markplaced : MarkPlaced = { newMark = marks.Head; board = board }
-
-                // let message : Message =
-                //     { msgType = NewMark
-                //       msg = MarkPlaced(markplaced) }
-
-                // let response : string = TicTacToe.Json.serialize markplaced
-                let response : string = "lol"
-
-                System.Console.WriteLine response
-                // the response needs to be converted to a ByteSegment
                 let byteResponse =
-                    response
+                    "Received: " + msgFromClient
                     |> System.Text.Encoding.UTF8.GetBytes
                     |> ByteSegment
 
-                // the `send` function sends a message back to the client
                 do! webSocket.send Text byteResponse true
 
             | (Close, _, _) ->
                 let emptyResponse = [||] |> ByteSegment
                 do! webSocket.send Close emptyResponse true
-
-                // after sending a Close message, stop the loop
                 loop <- false
 
             | _ -> ()
     }
 
-/// An example of explictly fetching websocket errors and handling them in your codebase.
 let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Choice<unit, Error>> =
 
     let exampleDisposableResource =
@@ -106,17 +111,14 @@ let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Ch
             member __.Dispose() =
                 printfn "Resource needed by websocket connection disposed" }
 
-    let websocketWorkflow = ws emptyGame webSocket context
+    let websocketWorkflow = ws webSocket context
 
     async {
         let! successOrError = websocketWorkflow
 
         match successOrError with
-        // Success case
         | Choice1Of2 () -> ()
-        // Error case
         | Choice2Of2 (error) ->
-            // Example error handling logic here
             printfn "Error: [%A]" error
             exampleDisposableResource.Dispose()
 
@@ -124,7 +126,7 @@ let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Ch
     }
 
 let app : WebPart =
-    choose [ path "/websocket" >=> handShake (ws emptyGame)
+    choose [ path "/websocket" >=> handShake ws
              // path "/websocketWithSubprotocol" >=> handShakeWithSubprotocol (chooseSubprotocol "test") ws
              path "/websocketWithError"
              >=> handShake wsWithErrorHandling
