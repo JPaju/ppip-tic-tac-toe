@@ -1,7 +1,7 @@
 module Json
 
 open System.Text.Json
-open TicTacToe.Core.Domain
+open TicTacToe.Core.Game
 
 let serialize obj = JsonSerializer.Serialize obj
 

@@ -1,6 +1,6 @@
 namespace TicTacToe.Core
 
-module Domain =
+module Game =
 
     type Sign =
         | X
@@ -20,13 +20,13 @@ module Domain =
         { dimensions: Dimensions
           marks: Mark list }
 
-    type GameState =
-        | GameOn of Board * Sign
+    type State =
+        | OnGoing of Board * Sign
         | GameEnded of Board * Result
 
 
 module Board =
-    open Domain
+    open Game
 
     let defaultDimensions = { height = 5; width = 5 }
 
@@ -49,10 +49,10 @@ module Board =
         List.exists ((=) coordinate) coordinates
 
 
-module Game =
-    open Domain
+module Play =
+    open Game
 
-    let init sign = GameOn(Board.empty, sign)
+    let init sign = OnGoing(Board.empty, sign)
 
     let changeSign sign =
         match sign with
@@ -76,9 +76,9 @@ module Game =
         (new System.Random()).NextDouble() < 0.1
 
 
-    let update (newMark: Mark) (game: GameState) : GameState =
+    let update (newMark: Mark) (game: State) : State =
         match game with
-        | GameOn (board, hasTurn) ->
+        | OnGoing (board, hasTurn) ->
             // TODO Check that newMark and hasTurn are the same
             let newBoard = placeMark newMark board
 
@@ -87,6 +87,6 @@ module Game =
             elif Board.isFull newBoard then
                 GameEnded(newBoard, Draw)
             else
-                GameOn(newBoard, changeSign hasTurn)
+                OnGoing(newBoard, changeSign hasTurn)
 
         | GameEnded (_, _) -> game

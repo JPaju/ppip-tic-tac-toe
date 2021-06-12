@@ -5,8 +5,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="TicTacToe/Core.fs" />
+    <Compile Include="TicTacToe/MultiplayerGame.fs" />
     <Compile Include="Json.fs" />
-    <Compile Include="WebsocketGame.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

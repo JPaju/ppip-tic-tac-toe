@@ -1,79 +1,97 @@
 ﻿open Suave
 open Suave.Operators
 open Suave.Filters
-open Suave.Files
 open Suave.RequestErrors
 open Suave.Logging
-open System
 open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Text
-open TicTacToe.Core.Domain
-open TicTacToe.Core
 open FSharp.Control.Reactive
 
+open TicTacToe.Core
+open TicTacToe.MultiplayerGame
 
-type PlayerId = string
-type Command = Mark * PlayerId
-
-let receivedCommands = Subject<Command>.broadcast
-
-receivedCommands
-|> Observable.subscribe (fun newCommand -> Console.WriteLine($"New command from websocket: {newCommand}"))
-|> ignore
-
+let receivedMessage = Subject<InMessage>.broadcast
+let sendMessage = Subject<OutMessage>.broadcast
 
 module Decode =
 
     let private parseInt string =
         try
-            let i = System.Int32.Parse string
-            Some(i)
+            System.Int32.Parse string |> Some
         with _ -> None
 
-    let coordinate x y : Coordinate option =
+    let private coordinate x y : Game.Coordinate option =
         Option.map2 (fun x y -> (x, y)) (parseInt x) (parseInt y)
 
-    let sign (sign: string) : Sign option =
+    let private sign (sign: string) : Game.Sign option =
         match sign.ToUpper() with
-        | "O" -> Some O
-        | "X" -> Some X
+        | "O" -> Game.Sign.O |> Some
+        | "X" -> Game.Sign.X |> Some
         | _ -> None
 
-    let command (string: string) : Command option =
+    let inMessage (string: string) : InMessage option =
         match string.Split([| ',' |]) with
-        | [| x; y; signString; name |] ->
+        | [| x; y; signString |] ->
             ((coordinate x y), (sign signString))
             ||> Option.map2 (fun coord sign -> (sign, coord))
-            |> Option.map (fun mark -> (mark, name))
+            |> Option.map MarkReceived
 
         | _ -> None
 
 
-let accumulator (oldState: GameState) (mark: Mark) : GameState =
-    let newState = Game.update mark oldState
+module Encode =
+    let sign (sign: Game.Sign) : string =
+        match sign with
+        | Game.Sign.X -> "X"
+        | Game.Sign.O -> "O"
 
-    System.Console.WriteLine($"Old state: {oldState}")
-    System.Console.WriteLine($"New state: {newState}")
+    let coordinate ((x, y): Game.Coordinate) : string = $"x: {x}, y: {y}"
 
-    newState
+    let mark ((s, c): Game.Mark) : string = $"{sign s} ({coordinate c})"
+
+    let board ({ marks = marks }: Game.Board) : string = $"{marks}"
+
+    let outMessage (msg: OutMessage) : string =
+        match msg with
+        | MarkPlaced (b, m) -> $"New mark: {mark m}, current board: {board b}"
+        | _ -> "Some not very important message"
+
+
+let updateGame (oldState: Game.State) (msg: InMessage) : Game.State =
+    match msg with
+    | MarkReceived mark -> Play.update mark oldState
+    | _ -> oldState
+
+let createOutmessage (currentState: Game.State) (msg: InMessage) : OutMessage =
+    match (currentState, msg) with
+    | (Game.OnGoing (board, _), MarkReceived mark) -> MarkPlaced(board, mark)
+    | _ -> SearchingOpponent
 
 let gameState =
-    receivedCommands
-    |> Observable.iter (fun cmd -> System.Console.WriteLine($"Received new command: {cmd}"))
-    |> Observable.map (fun (mark, _) -> mark)
-    |> Observable.scanInit (Game.init O) accumulator
+    receivedMessage
+    |> Observable.scanInit (Play.init Game.Sign.O) updateGame
 
-
-gameState
-|> Observable.subscribe (fun _ -> printfn "\n\n")
+Observable.zip gameState receivedMessage
+|> Observable.map (fun (state, msg) -> createOutmessage state msg)
+|> Observable.subscribe (fun msg -> sendMessage |> Subject.onNext msg |> ignore)
 |> ignore
 
-
-let ws (webSocket: WebSocket) (_: HttpContext) =
+let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
 
     socket {
+
+        sendMessage
+        |> Observable.map (
+            Encode.outMessage
+            >> System.Text.Encoding.UTF8.GetBytes
+            >> ByteSegment
+        )
+        |> Observable.map (fun bytes -> webSocket.send Text bytes true)
+        |> Observable.subscribe (Async.RunSynchronously >> ignore) // TODO Fix ?
+        |> ignore
+
         let mutable loop = true
 
         while loop do
@@ -82,19 +100,10 @@ let ws (webSocket: WebSocket) (_: HttpContext) =
             match msg with
             | (Text, data, true) ->
 
-                let msgFromClient = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
-
-                System.Console.WriteLine($"Received websocket message: {msgFromClient}")
-
-                Decode.command msgFromClient
-                |> Option.iter (fun cmd -> (receivedCommands |> Subject.onNext cmd |> ignore))
-
-                let byteResponse =
-                    "Received: " + msgFromClient
-                    |> System.Text.Encoding.UTF8.GetBytes
-                    |> ByteSegment
-
-                do! webSocket.send Text byteResponse true
+                data
+                |> Encoding.UTF8.GetString
+                |> Decode.inMessage
+                |> Option.iter (fun msg -> (receivedMessage |> Subject.onNext msg |> ignore))
 
             | (Close, _, _) ->
                 let emptyResponse = [||] |> ByteSegment
@@ -104,35 +113,9 @@ let ws (webSocket: WebSocket) (_: HttpContext) =
             | _ -> ()
     }
 
-let wsWithErrorHandling (webSocket: WebSocket) (context: HttpContext) : Async<Choice<unit, Error>> =
-
-    let exampleDisposableResource =
-        { new IDisposable with
-            member __.Dispose() =
-                printfn "Resource needed by websocket connection disposed" }
-
-    let websocketWorkflow = ws webSocket context
-
-    async {
-        let! successOrError = websocketWorkflow
-
-        match successOrError with
-        | Choice1Of2 () -> ()
-        | Choice2Of2 (error) ->
-            printfn "Error: [%A]" error
-            exampleDisposableResource.Dispose()
-
-        return successOrError
-    }
 
 let app : WebPart =
-    choose [ path "/websocket" >=> handShake ws
-             // path "/websocketWithSubprotocol" >=> handShakeWithSubprotocol (chooseSubprotocol "test") ws
-             path "/websocketWithError"
-             >=> handShake wsWithErrorHandling
-             GET
-             >=> choose [ path "/" >=> file "index.html"
-                          browseHome ]
+    choose [ path "/play" >=> handShake addNewConnection
              NOT_FOUND "Found no handlers." ]
 
 [<EntryPoint>]
