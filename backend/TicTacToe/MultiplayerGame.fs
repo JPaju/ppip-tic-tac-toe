@@ -7,7 +7,7 @@ module MultiplayerGame =
     type State =
         | NoPlayers
         | OnePlayer of Game.Sign
-        | Playing of Game.State
+        | TwoPlayers of Game.State
 
     type InMessage =
         | PlayerConnected
@@ -16,16 +16,31 @@ module MultiplayerGame =
 
     type OutMessage =
         | SearchingOpponent
-        | GameStarted of Game.Board * Game.Sign
-        | MarkPlaced of Game.Board * Game.Mark
-        | GameEnded of Game.Board * Game.Result
+        | MarkPlaced of Game.Playing * Game.Mark
+        | GameEnded of Game.Finished
 
 
-    let updateGame (message: InMessage) (state: State) : State =
+    let updateMultiplayerState (state: State) (message: InMessage) : State =
         match (message, state) with
         | (PlayerConnected, NoPlayers) -> OnePlayer Game.Sign.X
         | (PlayerConnected, OnePlayer sign) ->
-            let newGame = Game.OnGoing(Board.empty, sign)
-            Playing newGame
-        | (MarkReceived mark, Playing game) -> Playing(Play.update mark game)
+            let newGame = Play.init sign
+            TwoPlayers newGame
+        | (PlayerDisconnected, OnePlayer _) -> NoPlayers
+        | (MarkReceived mark, TwoPlayers game) -> TwoPlayers(Play.update mark game)
         | (_, _) -> state
+
+    let updateBoard (oldState: Game.State) (msg: InMessage) : Game.State =
+        match msg with
+        | MarkReceived mark -> Play.update mark oldState
+        | _ -> oldState
+
+    let createOutmessage (currentState: State) (msg: InMessage) : OutMessage =
+        match currentState with
+        | NoPlayers -> SearchingOpponent
+        | OnePlayer _ -> SearchingOpponent
+        | TwoPlayers boardState ->
+            match (boardState, msg) with
+            | (Game.GameOn game, MarkReceived mark) -> MarkPlaced(game, mark)
+            | (Game.GameOver result, MarkReceived _) -> GameEnded result
+            | _ -> SearchingOpponent

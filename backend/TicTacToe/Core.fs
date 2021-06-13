@@ -20,9 +20,12 @@ module Game =
         { dimensions: Dimensions
           marks: Mark list }
 
+    type Playing = Board * Sign
+    type Finished = Board * Result
+
     type State =
-        | OnGoing of Board * Sign
-        | Ended of Board * Result
+        | GameOn of Playing
+        | GameOver of Finished
 
 
 module Board =
@@ -52,7 +55,7 @@ module Board =
 module Play =
     open Game
 
-    let init sign = OnGoing(Board.empty, sign)
+    let init sign = GameOn(Board.empty, sign)
 
     let changeSign sign =
         match sign with
@@ -78,15 +81,15 @@ module Play =
 
     let update (newMark: Mark) (game: State) : State =
         match game with
-        | OnGoing (board, hasTurn) ->
+        | GameOn (board, hasTurn) ->
             // TODO Check that newMark and hasTurn are the same
             let newBoard = placeMark newMark board
 
             if hasPlayerWon hasTurn newBoard then
-                Ended(newBoard, (Winner hasTurn))
+                GameOver(newBoard, (Winner hasTurn))
             elif Board.isFull newBoard then
-                Ended(newBoard, Draw)
+                GameOver(newBoard, Draw)
             else
-                OnGoing(newBoard, changeSign hasTurn)
+                GameOn(newBoard, changeSign hasTurn)
 
-        | Ended (_, _) -> game
+        | GameOver (_, _) -> game

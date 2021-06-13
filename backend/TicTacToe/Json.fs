@@ -55,7 +55,7 @@ module Encode =
         Encode.object [ "dimensions", dimensions d
                         "marks", m |> List.map mark |> Encode.list ]
 
-    let markPlaced (newMark: Game.Mark) (b: Game.Board) =
+    let markPlaced (b: Game.Board) (newMark: Game.Mark) =
         Encode.object [ "newMark", mark newMark
                         "board", board b ]
 
@@ -68,10 +68,13 @@ module Encode =
         Encode.object [ "board", board b
                         "result", result r ]
 
+    let searchingOpponent =
+        Encode.object [ "waiting", Encode.string "waiting" ]
+
     let outMessage (msg: OutMessage) =
         match msg with
-        | MarkPlaced (b, m) -> markPlaced m b
+        | MarkPlaced ((b, _), m) -> markPlaced b m
         | GameEnded (b, r) -> gameEnded b r
-        | _ -> Encode.string "Some not very important message"
+        | SearchingOpponent -> searchingOpponent
 
 // {"sign":"O","coordinate":{"x":2, "y":3}}

@@ -1,4 +1,4 @@
-open Suave
+﻿open Suave
 open Suave.Operators
 open Suave.Filters
 open Suave.RequestErrors
@@ -10,33 +10,28 @@ open System.Text
 open FSharp.Control.Reactive
 
 open TicTacToe
-open TicTacToe.Core
-open TicTacToe.MultiplayerGame
-
-let receivedMessage = Subject<InMessage>.broadcast
-let sendMessage = Subject<OutMessage>.broadcast
 
 
-let updateGame (oldState: Game.State) (msg: InMessage) : Game.State =
-    match msg with
-    | MarkReceived mark -> Play.update mark oldState
-    | _ -> oldState
+let receivedMessage =
+    Subject<MultiplayerGame.InMessage>.broadcast
 
-let createOutmessage (currentState: Game.State) (msg: InMessage) : OutMessage =
-    match (currentState, msg) with
-    | (Game.OnGoing (board, _), MarkReceived mark) -> MarkPlaced(board, mark)
-    | _ -> SearchingOpponent
+let sendMessage =
+    Subject<MultiplayerGame.OutMessage>.broadcast
 
 let gameState =
     receivedMessage
-    |> Observable.scanInit (Play.init Game.Sign.O) updateGame
+    |> Observable.scanInit MultiplayerGame.NoPlayers MultiplayerGame.updateMultiplayerState
 
 Observable.zip gameState receivedMessage
-|> Observable.map (fun (state, msg) -> createOutmessage state msg)
+|> Observable.map (fun (state, msg) -> MultiplayerGame.createOutmessage state msg)
 |> Observable.subscribe (fun msg -> sendMessage |> Subject.onNext msg |> ignore)
 |> ignore
 
 let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
+
+    receivedMessage
+    |> Subject.onNext MultiplayerGame.PlayerConnected
+    |> ignore
 
     socket {
 
@@ -67,6 +62,11 @@ let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
             | (Close, _, _) ->
                 let emptyResponse = [||] |> ByteSegment
                 do! webSocket.send Close emptyResponse true
+
+                receivedMessage
+                |> Subject.onNext MultiplayerGame.PlayerDisconnected
+                |> ignore
+
                 loop <- false
 
             | _ -> ()
