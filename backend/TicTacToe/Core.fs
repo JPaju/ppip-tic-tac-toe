@@ -22,7 +22,7 @@ module Game =
 
     type State =
         | OnGoing of Board * Sign
-        | GameEnded of Board * Result
+        | Ended of Board * Result
 
 
 module Board =
@@ -83,10 +83,10 @@ module Play =
             let newBoard = placeMark newMark board
 
             if hasPlayerWon hasTurn newBoard then
-                GameEnded(newBoard, (Winner hasTurn))
+                Ended(newBoard, (Winner hasTurn))
             elif Board.isFull newBoard then
-                GameEnded(newBoard, Draw)
+                Ended(newBoard, Draw)
             else
                 OnGoing(newBoard, changeSign hasTurn)
 
-        | GameEnded (_, _) -> game
+        | Ended (_, _) -> game

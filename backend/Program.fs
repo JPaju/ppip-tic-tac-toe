@@ -1,4 +1,4 @@
-﻿open Suave
+open Suave
 open Suave.Operators
 open Suave.Filters
 open Suave.RequestErrors
@@ -9,54 +9,12 @@ open Suave.WebSocket
 open System.Text
 open FSharp.Control.Reactive
 
+open TicTacToe
 open TicTacToe.Core
 open TicTacToe.MultiplayerGame
 
 let receivedMessage = Subject<InMessage>.broadcast
 let sendMessage = Subject<OutMessage>.broadcast
-
-module Decode =
-
-    let private parseInt string =
-        try
-            System.Int32.Parse string |> Some
-        with _ -> None
-
-    let private coordinate x y : Game.Coordinate option =
-        Option.map2 (fun x y -> (x, y)) (parseInt x) (parseInt y)
-
-    let private sign (sign: string) : Game.Sign option =
-        match sign.ToUpper() with
-        | "O" -> Game.Sign.O |> Some
-        | "X" -> Game.Sign.X |> Some
-        | _ -> None
-
-    let inMessage (string: string) : InMessage option =
-        match string.Split([| ',' |]) with
-        | [| x; y; signString |] ->
-            ((coordinate x y), (sign signString))
-            ||> Option.map2 (fun coord sign -> (sign, coord))
-            |> Option.map MarkReceived
-
-        | _ -> None
-
-
-module Encode =
-    let sign (sign: Game.Sign) : string =
-        match sign with
-        | Game.Sign.X -> "X"
-        | Game.Sign.O -> "O"
-
-    let coordinate ((x, y): Game.Coordinate) : string = $"x: {x}, y: {y}"
-
-    let mark ((s, c): Game.Mark) : string = $"{sign s} ({coordinate c})"
-
-    let board ({ marks = marks }: Game.Board) : string = $"{marks}"
-
-    let outMessage (msg: OutMessage) : string =
-        match msg with
-        | MarkPlaced (b, m) -> $"New mark: {mark m}, current board: {board b}"
-        | _ -> "Some not very important message"
 
 
 let updateGame (oldState: Game.State) (msg: InMessage) : Game.State =
@@ -85,6 +43,7 @@ let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
         sendMessage
         |> Observable.map (
             Encode.outMessage
+            >> Encode.toJson
             >> System.Text.Encoding.UTF8.GetBytes
             >> ByteSegment
         )
