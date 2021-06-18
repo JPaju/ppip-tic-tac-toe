@@ -47,7 +47,7 @@ type Msg
 init : ( Model, Cmd Msg )
 init =
     ( Connecting
-    , Ports.debugPort "connect"
+    , Ports.connectionPort "connect"
     )
 
 
@@ -79,10 +79,10 @@ update msg model =
 
         ReceivedMark mark ->
             case model of
-                GameOn ({ hasTurn, board } as game) ->
+                GameOn ({ board } as game) ->
                     ( GameOn
                         { game
-                            | hasTurn = Sign.change hasTurn
+                            | hasTurn = Sign.change mark.sign
                             , board = Board.placeMark mark board
                         }
                     , Cmd.none
@@ -95,7 +95,7 @@ update msg model =
             ( Error err, Cmd.none )
 
         ConnectedToServer ->
-            ( SearchingOpponent, Ports.debugPort "searchOpponent" )
+            ( SearchingOpponent, Cmd.none )
 
         GameEnded board result ->
             ( FinishedGame board result, Cmd.none )
