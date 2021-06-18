@@ -3,11 +3,11 @@ namespace TicTacToe
 open Thoth.Json.Net
 open TicTacToe.Core
 open TicTacToe.MultiplayerGame
+open TicTacToe.Messages
 
 module Decode =
 
     let fromString = Decode.fromString
-
 
     let sign : Decoder<Game.Sign> =
         Decode.string
@@ -24,10 +24,10 @@ module Decode =
     let mark : Decoder<Game.Mark> =
         Decode.map2 (fun s c -> (s, c)) (Decode.field "sign" sign) (Decode.field "coordinate" coordinate)
 
-    let inMessage (string: string) : InMessage option =
+    let inMessage (player: PlayerData) (string: string) : PlayerMessage option =
         fromString mark string
         |> function
-        | Ok s -> s |> MarkReceived |> Some
+        | Ok s -> MarkReceived(player, s) |> GameMessage |> Some
         | _ -> None
 
 module Encode =
@@ -59,12 +59,22 @@ module Encode =
         Encode.object [ "newMark", mark newMark
                         "board", board b ]
 
-    let result (r: Game.Result) =
-        match r with
-        | Game.Result.Draw -> Encode.string "draw"
-        | Game.Result.Winner s -> sign s
+    let gameOn
+        ({ board = b
+           startingSign = startingSign
+           yourSign = yourSign }: StartInfo)
+        =
+        Encode.object [ "yourSign", sign yourSign
+                        "nowHasTurn", sign startingSign
+                        "board", board b ]
 
-    let gameEnded (b: Game.Board) (r: Game.Result) =
+    let result (r: Result) =
+        match r with
+        | Won -> Encode.string "won"
+        | Lost -> Encode.string "lost"
+        | Draw -> Encode.string "draw"
+
+    let gameEnded (b: Game.Board) (r: Result) =
         Encode.object [ "board", board b
                         "result", result r ]
 
@@ -73,8 +83,7 @@ module Encode =
 
     let outMessage (msg: OutMessage) =
         match msg with
-        | MarkPlaced ((b, _), m) -> markPlaced b m
-        | GameEnded (b, r) -> gameEnded b r
+        | OpponentFound startData -> gameOn startData
+        | NewMark ((b, _), m) -> markPlaced b m
+        | GameOver { board = b; result = r } -> gameEnded b r
         | SearchingOpponent -> searchingOpponent
-
-// {"sign":"O","coordinate":{"x":2, "y":3}}

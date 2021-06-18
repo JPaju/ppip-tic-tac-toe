@@ -14,8 +14,8 @@ channels:
       message:
         oneOf:
           - $ref: "#/components/messages/SearchingOpponent"
-          - $ref: "#/components/messages/MarkPlaced"
           - $ref: "#/components/messages/GameOn"
+          - $ref: "#/components/messages/MarkPlaced"
           - $ref: "#/components/messages/GameEnded"
     publish:
       message:

@@ -13,38 +13,48 @@ open TicTacToe
 
 
 let receivedMessage =
-    Subject<MultiplayerGame.InMessage>.broadcast
+    Subject<MultiplayerGame.PlayerMessage>.broadcast
 
-let sendMessage =
-    Subject<MultiplayerGame.OutMessage>.broadcast
+let events =
+    Subject<MultiplayerGame.TargetedEvent>.broadcast
 
 let gameState =
     receivedMessage
-    |> Observable.scanInit MultiplayerGame.NoPlayers MultiplayerGame.updateMultiplayerState
+    |> Observable.scanInit
+        (None, MultiplayerGame.NoPlayers)
+        (fun (_, state) msg -> MultiplayerGame.processIncomingMessage state msg)
+    |> Observable.filter (fst >> Option.isSome)
+    |> Observable.map (fst >> Option.get)
+    |> Observable.subscribe (fun msg -> events |> Subject.onNext msg |> ignore)
 
-Observable.zip gameState receivedMessage
-|> Observable.map (fun (state, msg) -> MultiplayerGame.createOutmessage state msg)
-|> Observable.subscribe (fun msg -> sendMessage |> Subject.onNext msg |> ignore)
-|> ignore
 
-let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
+let addNewConnection (webSocket: WebSocket) (httpContext: HttpContext) =
+
+    let portString = httpContext.connection.port.ToString()
+    let name = httpContext.connection.ipAddr.ToString()
+    let playerData : MultiplayerGame.PlayerData = { id = portString; name = name }
+
+    events
+    |> Observable.map (
+        (Messages.fromTargetedEvent playerData)
+        >> Encode.outMessage
+        >> Encode.toJson
+        >> System.Text.Encoding.UTF8.GetBytes
+        >> ByteSegment
+    )
+    |> Observable.map (fun bytes -> webSocket.send Text bytes true)
+    |> Observable.subscribe (Async.RunSynchronously >> ignore) // TODO Fix ?
+    |> ignore
 
     receivedMessage
-    |> Subject.onNext MultiplayerGame.PlayerConnected
+    |> Subject.onNext (
+        playerData
+        |> MultiplayerGame.PlayerConnected
+        |> MultiplayerGame.ConnectionMessage
+    )
     |> ignore
 
     socket {
-
-        sendMessage
-        |> Observable.map (
-            Encode.outMessage
-            >> Encode.toJson
-            >> System.Text.Encoding.UTF8.GetBytes
-            >> ByteSegment
-        )
-        |> Observable.map (fun bytes -> webSocket.send Text bytes true)
-        |> Observable.subscribe (Async.RunSynchronously >> ignore) // TODO Fix ?
-        |> ignore
 
         let mutable loop = true
 
@@ -56,16 +66,19 @@ let addNewConnection (webSocket: WebSocket) (_: HttpContext) =
 
                 data
                 |> Encoding.UTF8.GetString
-                |> Decode.inMessage
-                |> Option.iter (fun msg -> (receivedMessage |> Subject.onNext msg |> ignore))
+                |> Decode.inMessage playerData
+                |> Option.iter
+                    (fun msg ->
+                        System.Console.WriteLine($"Sending message to: {name}, content: {msg}")
+                        (receivedMessage |> Subject.onNext msg |> ignore))
 
             | (Close, _, _) ->
                 let emptyResponse = [||] |> ByteSegment
                 do! webSocket.send Close emptyResponse true
 
-                receivedMessage
-                |> Subject.onNext MultiplayerGame.PlayerDisconnected
-                |> ignore
+                // receivedMessage
+                // |> Subject.onNext (playerData |> MultiplayerGame.PlayerDisconnected |> MultiplayerGame.ConnectionMessage)
+                // |> ignore
 
                 loop <- false
 

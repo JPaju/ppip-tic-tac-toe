@@ -55,7 +55,7 @@ module Board =
 module Play =
     open Game
 
-    let init sign = GameOn(Board.empty, sign)
+    let init sign = (Board.empty, sign)
 
     let changeSign sign =
         match sign with
@@ -76,7 +76,7 @@ module Play =
 
     // TODO Implement
     let hasPlayerWon (player: Sign) (board: Board) =
-        (new System.Random()).NextDouble() < 0.1
+        (new System.Random()).NextDouble() < 0.3
 
 
     let update (newMark: Mark) (game: State) : State =
