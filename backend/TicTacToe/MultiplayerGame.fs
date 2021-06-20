@@ -66,7 +66,7 @@ module MultiplayerGame =
             | PlayerConnected player2 ->
                 let players = { X = player1; O = player2 }
 
-                let playing = Play.init Game.Sign.X
+                let playing = Play.init 5 Game.Sign.X
                 let gameState = Game.GameOn <| playing
 
                 let gameData =
@@ -84,7 +84,7 @@ module MultiplayerGame =
                         players = players }) ->
             match gameMsg with
             | MarkReceived (_, mark) ->
-                let newGameState = Play.update mark oldGameState
+                let newGameState = Play.playTurn mark oldGameState
 
                 let gameData =
                     { players = players

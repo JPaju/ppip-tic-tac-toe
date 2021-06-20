@@ -263,7 +263,7 @@ resultDecoder =
                     "LOST" ->
                         Decode.succeed Lost
 
-                    "TIE" ->
+                    "DRAW" ->
                         Decode.succeed Draw
 
                     _ ->
