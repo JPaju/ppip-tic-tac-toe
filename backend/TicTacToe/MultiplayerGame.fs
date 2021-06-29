@@ -66,8 +66,8 @@ module MultiplayerGame =
             | PlayerConnected player2 ->
                 let players = { X = player1; O = player2 }
 
-                let playing = Play.init 5 Game.Sign.X
-                let gameState = Game.GameOn <| playing
+                let playing = Play.init 6 Game.Sign.X //TODO random size?
+                let gameState = Game.GameOn playing
 
                 let gameData =
                     { players = players

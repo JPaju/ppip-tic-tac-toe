@@ -96,10 +96,10 @@ module Rules =
         else if smallerDimension < 6 then 4
         else 5
 
-    let hasPlayerWon (player: Sign) (board: Board) =
+    let hasPlayerWon (playerSign: Sign) (board: Board) =
         let playerCoordinates =
             board.marks
-            |> List.filter (fst >> ((=) player))
+            |> List.filter (fst >> ((=) playerSign))
             |> List.map snd
 
         let requiredToWin = marksInRowRequiredToWin board.dimensions

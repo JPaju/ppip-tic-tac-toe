@@ -17,4 +17,4 @@ elm-app start
 To deploy the app it must be bundled to HTML & JS. This builds the app for production to the `build` folder.:
 ```sh
 elm-app build
-``
+```

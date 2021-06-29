@@ -69,7 +69,7 @@ let addNewConnection (webSocket: WebSocket) (httpContext: HttpContext) =
                 |> Decode.inMessage playerData
                 |> Option.iter
                     (fun msg ->
-                        System.Console.WriteLine($"Sending message to: {name}, content: {msg}")
+                        System.Console.WriteLine($"Sending message to: {name}, content: {msg}") //TODO remove?
                         (receivedMessage |> Subject.onNext msg |> ignore))
 
             | (Close, _, _) ->
